@@ -1,0 +1,951 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PM Hub — Product Command Center</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #ffffff;
+    --bg2: #f6f5f1;
+    --bg3: #eeecea;
+    --text: #1a1a18;
+    --text2: #6b6a65;
+    --text3: #9e9d97;
+    --border: rgba(0,0,0,0.1);
+    --border2: rgba(0,0,0,0.18);
+    --blue: #185FA5;
+    --blue-bg: #E6F1FB;
+    --blue-text: #0C447C;
+    --purple: #534AB7;
+    --purple-bg: #EEEDFE;
+    --purple-text: #3C3489;
+    --green: #0F6E56;
+    --green-bg: #E1F5EE;
+    --green-text: #085041;
+    --amber: #854F0B;
+    --amber-bg: #FAEEDA;
+    --amber-text: #633806;
+    --red: #A32D2D;
+    --red-bg: #FCEBEB;
+    --red-text: #791F1F;
+    --gray-bg: #F1EFE8;
+    --gray-text: #444441;
+    --radius: 8px;
+    --radius-lg: 12px;
+    --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1c1c1a;
+      --bg2: #252523;
+      --bg3: #2e2e2b;
+      --text: #e8e6e0;
+      --text2: #9e9d97;
+      --text3: #6b6a65;
+      --border: rgba(255,255,255,0.1);
+      --border2: rgba(255,255,255,0.18);
+      --blue-bg: #0c2d50;
+      --blue-text: #85B7EB;
+      --purple-bg: #26215C;
+      --purple-text: #AFA9EC;
+      --green-bg: #04342C;
+      --green-text: #5DCAA5;
+      --amber-bg: #412402;
+      --amber-text: #EF9F27;
+      --red-bg: #501313;
+      --red-text: #F09595;
+      --gray-bg: #2C2C2A;
+      --gray-text: #B4B2A9;
+    }
+  }
+
+  body { font-family: var(--font); background: var(--bg3); color: var(--text); font-size: 14px; line-height: 1.5; min-height: 100vh; }
+
+  .app { display: flex; height: 100vh; overflow: hidden; }
+
+  /* ── Sidebar ── */
+  .sidebar { width: 220px; background: var(--bg2); border-right: 1px solid var(--border); display: flex; flex-direction: column; flex-shrink: 0; overflow-y: auto; }
+  .sidebar-header { padding: 20px 16px 14px; border-bottom: 1px solid var(--border); }
+  .sidebar-logo { font-size: 15px; font-weight: 600; color: var(--text); display: flex; align-items: center; gap: 9px; }
+  .logo-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--blue); }
+  .sidebar-subtitle { font-size: 11px; color: var(--text3); margin-top: 3px; padding-left: 18px; }
+  .nav-section { padding: 12px 8px 4px; }
+  .nav-label { font-size: 10px; color: var(--text3); letter-spacing: 0.07em; text-transform: uppercase; padding: 0 8px; margin-bottom: 4px; }
+  .nav-item { display: flex; align-items: center; gap: 9px; padding: 7px 10px; border-radius: var(--radius); cursor: pointer; font-size: 13px; color: var(--text2); transition: all 0.15s; border: 1px solid transparent; }
+  .nav-item:hover { background: var(--bg); color: var(--text); }
+  .nav-item.active { background: var(--bg); color: var(--text); font-weight: 500; border-color: var(--border); }
+  .nav-icon { font-size: 13px; width: 18px; text-align: center; }
+  .nav-badge { margin-left: auto; background: var(--blue-bg); color: var(--blue-text); font-size: 10px; font-weight: 600; padding: 1px 7px; border-radius: 10px; }
+  .nav-badge.ai { background: var(--purple-bg); color: var(--purple-text); }
+
+  /* ── Main ── */
+  .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: var(--bg); }
+  .topbar { padding: 14px 24px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+  .topbar-left { display: flex; align-items: center; gap: 12px; }
+  .topbar-title { font-size: 15px; font-weight: 600; color: var(--text); }
+  .quarter-badge { font-size: 11px; color: var(--text2); background: var(--bg2); padding: 3px 10px; border-radius: 12px; border: 1px solid var(--border); }
+  .topbar-actions { display: flex; gap: 8px; align-items: center; }
+  .btn { padding: 6px 14px; border-radius: var(--radius); font-size: 12px; font-weight: 500; cursor: pointer; border: 1px solid var(--border2); background: transparent; color: var(--text); transition: all 0.15s; font-family: var(--font); }
+  .btn:hover { background: var(--bg2); }
+  .btn-primary { background: var(--blue); color: #fff; border-color: var(--blue); }
+  .btn-primary:hover { background: var(--blue-text); border-color: var(--blue-text); }
+  .btn-sm { padding: 4px 10px; font-size: 11px; }
+
+  .content { flex: 1; overflow-y: auto; padding: 24px; }
+  .view { display: none; }
+  .view.active { display: block; }
+
+  /* ── Setup Banner ── */
+  .setup-banner { background: var(--amber-bg); border: 1px solid var(--amber); border-radius: var(--radius-lg); padding: 14px 18px; margin-bottom: 20px; display: flex; align-items: flex-start; gap: 12px; }
+  .setup-banner.hidden { display: none; }
+  .setup-icon { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
+  .setup-title { font-size: 13px; font-weight: 600; color: var(--amber-text); margin-bottom: 4px; }
+  .setup-desc { font-size: 12px; color: var(--amber-text); opacity: 0.85; line-height: 1.5; }
+  .setup-input { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+  .setup-input input { flex: 1; min-width: 260px; padding: 7px 12px; border: 1px solid var(--border2); border-radius: var(--radius); font-size: 12px; background: var(--bg); color: var(--text); font-family: var(--font); outline: none; }
+  .setup-input input:focus { border-color: var(--blue); }
+
+  /* ── Metrics ── */
+  .metrics-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
+  .metric-card { background: var(--bg2); border-radius: var(--radius); padding: 14px 16px; border: 1px solid var(--border); }
+  .metric-label { font-size: 11px; color: var(--text3); margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .metric-value { font-size: 24px; font-weight: 600; color: var(--text); line-height: 1; }
+  .metric-sub { font-size: 11px; color: var(--text3); margin-top: 4px; }
+  .metric-up { color: var(--green); }
+  .metric-down { color: var(--red); }
+
+  /* ── Section ── */
+  .section-title { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between; }
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+  .card { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 16px; margin-bottom: 16px; }
+
+  /* ── Feature items ── */
+  .feature-item { display: flex; align-items: flex-start; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border); cursor: pointer; transition: background 0.1s; }
+  .feature-item:last-child { border-bottom: none; }
+  .feature-item:hover { background: var(--bg2); margin: 0 -8px; padding: 10px 8px; border-radius: 6px; }
+  .feature-dot { width: 8px; height: 8px; border-radius: 50%; margin-top: 5px; flex-shrink: 0; }
+  .feature-info { flex: 1; min-width: 0; }
+  .feature-name { font-size: 13px; font-weight: 500; color: var(--text); }
+  .feature-meta { font-size: 11px; color: var(--text3); margin-top: 2px; }
+  .feature-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+  .figma-btn { font-size: 10px; padding: 2px 8px; border-radius: 10px; background: var(--purple-bg); color: var(--purple-text); border: none; cursor: pointer; text-decoration: none; display: inline-block; font-weight: 500; }
+  .figma-btn:hover { opacity: 0.8; }
+  .badge { font-size: 10px; padding: 2px 8px; border-radius: 10px; font-weight: 500; white-space: nowrap; }
+
+  .b-inprogress { background: var(--blue-bg); color: var(--blue-text); }
+  .b-design { background: var(--purple-bg); color: var(--purple-text); }
+  .b-planned { background: var(--green-bg); color: var(--green-text); }
+  .b-review { background: var(--amber-bg); color: var(--amber-text); }
+  .b-done { background: var(--green-bg); color: var(--green-text); }
+  .b-blocked { background: var(--red-bg); color: var(--red-text); }
+  .d-inprogress { background: var(--blue); }
+  .d-design { background: var(--purple); }
+  .d-planned { background: var(--green); }
+  .d-review { background: var(--amber); }
+  .d-done { background: var(--green); }
+  .d-blocked { background: var(--red); }
+
+  /* ── Progress ── */
+  .progress-bar { height: 4px; background: var(--bg3); border-radius: 2px; margin-top: 6px; }
+  .progress-fill { height: 100%; border-radius: 2px; }
+
+  /* ── Filter pills ── */
+  .filter-row { display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap; }
+  .filter-pill { font-size: 11px; padding: 4px 12px; border: 1px solid var(--border2); border-radius: 12px; background: transparent; color: var(--text2); cursor: pointer; font-family: var(--font); transition: all 0.15s; }
+  .filter-pill.active { background: var(--blue); color: #fff; border-color: var(--blue); }
+  .filter-pill:hover:not(.active) { background: var(--bg2); color: var(--text); }
+
+  /* ── Modal ── */
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 100; display: none; align-items: center; justify-content: center; }
+  .modal-overlay.open { display: flex; }
+  .modal { background: var(--bg); border-radius: var(--radius-lg); padding: 24px; width: 520px; max-width: 95vw; border: 1px solid var(--border); box-shadow: 0 8px 32px rgba(0,0,0,0.12); }
+  .modal-title { font-size: 15px; font-weight: 600; color: var(--text); margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; }
+  .modal-close { background: none; border: none; font-size: 18px; cursor: pointer; color: var(--text3); line-height: 1; }
+  .form-row { margin-bottom: 14px; }
+  .form-label { font-size: 12px; font-weight: 500; color: var(--text2); margin-bottom: 5px; }
+  .form-input, .form-select, .form-textarea { width: 100%; padding: 8px 12px; border: 1px solid var(--border2); border-radius: var(--radius); font-size: 13px; background: var(--bg); color: var(--text); font-family: var(--font); outline: none; transition: border 0.15s; }
+  .form-input:focus, .form-select:focus, .form-textarea:focus { border-color: var(--blue); }
+  .form-textarea { resize: vertical; min-height: 60px; }
+  .form-two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .figma-preview { font-size: 11px; color: var(--text3); margin-top: 4px; }
+  .figma-preview a { color: var(--blue); text-decoration: none; }
+  .modal-footer { display: flex; gap: 8px; justify-content: flex-end; margin-top: 18px; }
+
+  /* ── Roadmap timeline ── */
+  .roadmap-q { margin-bottom: 20px; }
+  .roadmap-q-header { font-size: 12px; font-weight: 600; color: var(--text2); text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+  .roadmap-q-badge { font-size: 10px; padding: 2px 8px; border-radius: 10px; text-transform: none; letter-spacing: 0; }
+  .timeline-row { display: flex; gap: 12px; padding: 9px 12px; border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 8px; background: var(--bg2); cursor: pointer; transition: background 0.1s; align-items: center; }
+  .timeline-row:hover { background: var(--bg3); }
+  .timeline-q { font-size: 10px; font-weight: 600; color: var(--text3); width: 28px; flex-shrink: 0; }
+  .timeline-info { flex: 1; min-width: 0; }
+  .timeline-name { font-size: 13px; font-weight: 500; color: var(--text); }
+  .timeline-team { font-size: 11px; color: var(--text3); margin-top: 1px; }
+
+  /* ── Team ── */
+  .team-av { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; flex-shrink: 0; }
+  .team-row-item { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--border); }
+  .team-row-item:last-child { border-bottom: none; }
+  .team-name { font-size: 13px; font-weight: 500; color: var(--text); }
+  .team-role { font-size: 11px; color: var(--text3); }
+
+  /* ── VP Report ── */
+  .report-stat { display: flex; justify-content: space-between; padding: 6px 0; font-size: 13px; border-bottom: 1px solid var(--border); }
+  .report-stat:last-child { border-bottom: none; }
+  .report-key { color: var(--text2); }
+  .report-val { font-weight: 500; color: var(--text); }
+
+  /* ── Chat ── */
+  .chat-wrap { display: flex; flex-direction: column; height: calc(100vh - 62px); }
+  .chat-messages { flex: 1; overflow-y: auto; padding: 8px 0 16px; display: flex; flex-direction: column; gap: 14px; }
+  .msg { display: flex; gap: 10px; }
+  .msg.user { flex-direction: row-reverse; }
+  .msg-av { width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; flex-shrink: 0; }
+  .av-ai { background: var(--blue-bg); color: var(--blue-text); }
+  .av-user { background: var(--bg3); color: var(--text2); }
+  .msg-bubble { max-width: 80%; padding: 10px 14px; border-radius: var(--radius-lg); font-size: 13px; line-height: 1.6; color: var(--text); border: 1px solid var(--border); background: var(--bg2); }
+  .msg.user .msg-bubble { background: var(--blue-bg); border-color: transparent; color: var(--blue-text); }
+  .quick-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+  .quick-chip { font-size: 11px; padding: 5px 11px; border: 1px solid var(--border2); border-radius: 12px; background: transparent; color: var(--text2); cursor: pointer; font-family: var(--font); transition: all 0.15s; }
+  .quick-chip:hover { background: var(--bg2); color: var(--text); }
+  .chat-input-row { display: flex; gap: 8px; }
+  .chat-input { flex: 1; padding: 9px 14px; border: 1px solid var(--border2); border-radius: var(--radius-lg); font-size: 13px; background: var(--bg); color: var(--text); font-family: var(--font); outline: none; transition: border 0.15s; }
+  .chat-input:focus { border-color: var(--blue); }
+  .send-btn { padding: 9px 18px; background: var(--blue); color: #fff; border: none; border-radius: var(--radius-lg); font-size: 13px; cursor: pointer; font-family: var(--font); font-weight: 500; transition: background 0.15s; }
+  .send-btn:hover { background: var(--blue-text); }
+  .loading-dots span { display: inline-block; width: 5px; height: 5px; border-radius: 50%; background: var(--text3); margin: 0 2px; animation: blink 1.2s infinite; }
+  .loading-dots span:nth-child(2) { animation-delay: 0.2s; }
+  .loading-dots span:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes blink { 0%,80%,100%{opacity:.2} 40%{opacity:1} }
+
+  /* ── Sync status ── */
+  .sync-status { font-size: 11px; color: var(--text3); display: flex; align-items: center; gap: 5px; }
+  .sync-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); }
+  .sync-dot.loading { background: var(--amber); animation: blink 1s infinite; }
+  .sync-dot.error { background: var(--red); }
+
+  @media (max-width: 768px) {
+    .sidebar { display: none; }
+    .metrics-row { grid-template-columns: repeat(2, 1fr); }
+    .two-col { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <!-- ── SIDEBAR ── -->
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <div class="sidebar-logo"><div class="logo-dot"></div>PM Hub</div>
+      <div class="sidebar-subtitle">Product Command Center</div>
+    </div>
+    <div class="nav-section">
+      <div class="nav-label">Workspace</div>
+      <div class="nav-item active" onclick="switchView('dashboard')"><span class="nav-icon">◈</span>Dashboard</div>
+      <div class="nav-item" onclick="switchView('features')"><span class="nav-icon">⬡</span>Features <span class="nav-badge" id="feature-count">0</span></div>
+      <div class="nav-item" onclick="switchView('roadmap')"><span class="nav-icon">↗</span>Roadmap</div>
+      <div class="nav-item" onclick="switchView('team')"><span class="nav-icon">◉</span>Team</div>
+    </div>
+    <div class="nav-section">
+      <div class="nav-label">Reports</div>
+      <div class="nav-item" onclick="switchView('report')"><span class="nav-icon">▦</span>VP Report</div>
+      <div class="nav-item" onclick="switchView('chat')"><span class="nav-icon">✦</span>AI Assistant <span class="nav-badge ai">AI</span></div>
+    </div>
+    <div style="margin-top:auto;padding:14px 12px;border-top:1px solid var(--border)">
+      <div class="sync-status" id="sync-status"><div class="sync-dot" id="sync-dot"></div><span id="sync-text">Not connected</span></div>
+      <button class="btn btn-sm" style="margin-top:8px;width:100%;" onclick="switchView('setup')">⚙ Configure Sheet</button>
+    </div>
+  </div>
+
+  <!-- ── MAIN ── -->
+  <div class="main">
+    <div class="topbar">
+      <div class="topbar-left">
+        <div class="topbar-title" id="view-title">Dashboard</div>
+        <div class="quarter-badge" id="quarter-label">Q2 2026</div>
+      </div>
+      <div class="topbar-actions">
+        <div class="sync-status" id="sync-status-top" style="display:none"><div class="sync-dot" id="sync-dot-top"></div><span id="sync-text-top">—</span></div>
+        <button class="btn" onclick="loadSheet()" title="Refresh data">↻ Refresh</button>
+        <button class="btn btn-primary" onclick="openAddModal()">+ Add feature</button>
+      </div>
+    </div>
+
+    <div class="content">
+
+      <!-- ── SETUP ── -->
+      <div class="view" id="view-setup">
+        <div class="card">
+          <div class="section-title">Connect your Google Sheet</div>
+          <p style="font-size:13px;color:var(--text2);margin-bottom:16px;line-height:1.6">Follow these steps to connect a Google Sheet that your whole team can edit. The dashboard will pull live data every time you refresh.</p>
+          <ol style="font-size:13px;color:var(--text2);line-height:2;padding-left:18px;margin-bottom:20px;">
+            <li>Create a Google Sheet and add these columns in row 1: <strong>Name, Team, Owner, Status, Priority, Quarter, Due Date, Figma Link, Notes</strong></li>
+            <li>Go to <strong>File → Share → Publish to web</strong></li>
+            <li>Choose <strong>Sheet1</strong>, format <strong>CSV</strong>, and click <strong>Publish</strong></li>
+            <li>Copy the published URL and paste it below</li>
+          </ol>
+          <div class="form-row">
+            <div class="form-label">Published Google Sheet CSV URL</div>
+            <input class="form-input" id="sheet-url-input" placeholder="https://docs.google.com/spreadsheets/d/.../pub?output=csv" />
+            <div class="figma-preview">Example: https://docs.google.com/spreadsheets/d/YOUR_ID/pub?gid=0&single=true&output=csv</div>
+          </div>
+          <div class="form-row">
+            <div class="form-label">Quarter label (displayed in header)</div>
+            <input class="form-input" id="quarter-input" placeholder="Q2 2026" value="Q2 2026" />
+          </div>
+          <div style="display:flex;gap:8px;margin-top:16px;">
+            <button class="btn btn-primary" onclick="saveSheetConfig()">Connect & load data</button>
+            <button class="btn" onclick="loadDemoData()">Load demo data instead</button>
+          </div>
+          <div id="setup-result" style="margin-top:12px;font-size:12px;"></div>
+        </div>
+
+        <div class="card">
+          <div class="section-title">Sheet column format</div>
+          <div style="overflow-x:auto;">
+            <table style="width:100%;border-collapse:collapse;font-size:12px;">
+              <thead>
+                <tr style="border-bottom:1px solid var(--border);">
+                  <th style="text-align:left;padding:6px 8px;color:var(--text2);font-weight:600;">Column</th>
+                  <th style="text-align:left;padding:6px 8px;color:var(--text2);font-weight:600;">Values</th>
+                  <th style="text-align:left;padding:6px 8px;color:var(--text2);font-weight:600;">Example</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr style="border-bottom:1px solid var(--border);"><td style="padding:6px 8px;font-weight:500;">Name</td><td style="padding:6px 8px;color:var(--text2);">Any text</td><td style="padding:6px 8px;color:var(--text3);">Onboarding redesign</td></tr>
+                <tr style="border-bottom:1px solid var(--border);"><td style="padding:6px 8px;font-weight:500;">Team</td><td style="padding:6px 8px;color:var(--text2);">Any text</td><td style="padding:6px 8px;color:var(--text3);">Dev + UI/UX</td></tr>
+                <tr style="border-bottom:1px solid var(--border);"><td style="padding:6px 8px;font-weight:500;">Owner</td><td style="padding:6px 8px;color:var(--text2);">Any text</td><td style="padding:6px 8px;color:var(--text3);">Budi K.</td></tr>
+                <tr style="border-bottom:1px solid var(--border);"><td style="padding:6px 8px;font-weight:500;">Status</td><td style="padding:6px 8px;color:var(--text2);">inprogress · design · planned · review · done · blocked</td><td style="padding:6px 8px;color:var(--text3);">inprogress</td></tr>
+                <tr style="border-bottom:1px solid var(--border);"><td style="padding:6px 8px;font-weight:500;">Priority</td><td style="padding:6px 8px;color:var(--text2);">High · Medium · Low</td><td style="padding:6px 8px;color:var(--text3);">High</td></tr>
+                <tr style="border-bottom:1px solid var(--border);"><td style="padding:6px 8px;font-weight:500;">Quarter</td><td style="padding:6px 8px;color:var(--text2);">Any text</td><td style="padding:6px 8px;color:var(--text3);">Q2 2026</td></tr>
+                <tr style="border-bottom:1px solid var(--border);"><td style="padding:6px 8px;font-weight:500;">Due Date</td><td style="padding:6px 8px;color:var(--text2);">Any text</td><td style="padding:6px 8px;color:var(--text3);">Apr 15</td></tr>
+                <tr style="border-bottom:1px solid var(--border);"><td style="padding:6px 8px;font-weight:500;">Figma Link</td><td style="padding:6px 8px;color:var(--text2);">Full URL or leave blank</td><td style="padding:6px 8px;color:var(--text3);">https://figma.com/file/...</td></tr>
+                <tr><td style="padding:6px 8px;font-weight:500;">Notes</td><td style="padding:6px 8px;color:var(--text2);">Any text</td><td style="padding:6px 8px;color:var(--text3);">Blocked by vendor API keys</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── DASHBOARD ── -->
+      <div class="view active" id="view-dashboard">
+        <div class="metrics-row">
+          <div class="metric-card"><div class="metric-label">Total features</div><div class="metric-value" id="m-total">—</div><div class="metric-sub">This quarter</div></div>
+          <div class="metric-card"><div class="metric-label">In progress</div><div class="metric-value" id="m-inprogress">—</div><div class="metric-sub">Active work</div></div>
+          <div class="metric-card"><div class="metric-label">Completed</div><div class="metric-value" id="m-done">—</div><div class="metric-sub metric-up" id="m-done-sub"></div></div>
+          <div class="metric-card"><div class="metric-label">Blocked</div><div class="metric-value" id="m-blocked">—</div><div class="metric-sub metric-down" id="m-blocked-sub"></div></div>
+        </div>
+        <div class="two-col">
+          <div class="card">
+            <div class="section-title">Active features</div>
+            <div id="dash-active-list"><div style="color:var(--text3);font-size:13px;">No data yet — connect your sheet or load demo data.</div></div>
+          </div>
+          <div class="card">
+            <div class="section-title">Progress by team</div>
+            <div id="dash-progress"></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="section-title">Upcoming deadlines</div>
+          <div id="dash-deadlines" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;"></div>
+        </div>
+      </div>
+
+      <!-- ── FEATURES ── -->
+      <div class="view" id="view-features">
+        <div class="filter-row" id="filter-row">
+          <button class="filter-pill active" onclick="filterFeatures('all',this)">All</button>
+          <button class="filter-pill" onclick="filterFeatures('inprogress',this)">In progress</button>
+          <button class="filter-pill" onclick="filterFeatures('design',this)">Design</button>
+          <button class="filter-pill" onclick="filterFeatures('review',this)">Review</button>
+          <button class="filter-pill" onclick="filterFeatures('blocked',this)">Blocked</button>
+          <button class="filter-pill" onclick="filterFeatures('planned',this)">Planned</button>
+          <button class="filter-pill" onclick="filterFeatures('done',this)">Done</button>
+        </div>
+        <div class="card" id="feature-list-card">
+          <div id="feature-list"><div style="color:var(--text3);font-size:13px;">No features yet — connect your Google Sheet or add one manually.</div></div>
+        </div>
+      </div>
+
+      <!-- ── ROADMAP ── -->
+      <div class="view" id="view-roadmap">
+        <div id="roadmap-content"><div style="color:var(--text3);font-size:13px;">No data yet — connect your sheet or load demo data.</div></div>
+      </div>
+
+      <!-- ── TEAM ── -->
+      <div class="view" id="view-team">
+        <div class="two-col">
+          <div class="card">
+            <div class="section-title">UI/UX team</div>
+            <div id="team-uiux"></div>
+          </div>
+          <div class="card">
+            <div class="section-title">Development team</div>
+            <div id="team-dev"></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="section-title">All contributors</div>
+          <div id="team-all"></div>
+        </div>
+      </div>
+
+      <!-- ── VP REPORT ── -->
+      <div class="view" id="view-report">
+        <div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:16px;">
+          <button class="btn" onclick="printReport()">Print / save PDF</button>
+          <button class="btn btn-primary" onclick="generateAiReport()">✦ AI-generate full report</button>
+        </div>
+        <div class="card" id="report-summary">
+          <div class="section-title">Executive summary — <span id="report-quarter">Q2 2026</span></div>
+          <div id="report-stats"></div>
+        </div>
+        <div class="two-col">
+          <div class="card">
+            <div class="section-title">Highlights</div>
+            <div id="report-highlights" style="font-size:13px;color:var(--text2);line-height:1.9;"></div>
+          </div>
+          <div class="card">
+            <div class="section-title">Risks & blockers</div>
+            <div id="report-risks" style="font-size:13px;color:var(--text2);line-height:1.9;"></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="section-title">Feature status breakdown</div>
+          <div id="report-breakdown"></div>
+        </div>
+      </div>
+
+      <!-- ── AI CHAT ── -->
+      <div class="view" id="view-chat">
+        <div class="chat-wrap">
+          <div class="chat-messages" id="chat-messages">
+            <div class="msg">
+              <div class="msg-av av-ai">AI</div>
+              <div class="msg-bubble">Hi! I'm your PM AI assistant. I can help you track features, draft VP reports, identify blockers, plan your roadmap, and coordinate between teams. What do you need?</div>
+            </div>
+          </div>
+          <div>
+            <div class="quick-row">
+              <button class="quick-chip" onclick="sendQuick('Summarize current quarter progress for a VP meeting')">Summarize Q for VP ↗</button>
+              <button class="quick-chip" onclick="sendQuick('What features are blocked and what should I do about them?')">Blocked features ↗</button>
+              <button class="quick-chip" onclick="sendQuick('What should I prioritize this week as PM?')">This week priorities ↗</button>
+              <button class="quick-chip" onclick="sendQuick('Draft a brief status update for my dev and UI/UX team')">Team status update ↗</button>
+              <button class="quick-chip" onclick="sendQuick('Generate a complete executive VP report for this quarter')">Full VP report ↗</button>
+            </div>
+            <div class="chat-input-row">
+              <input class="chat-input" id="chat-input" placeholder="Ask about features, blockers, roadmap, reports..." onkeydown="if(event.key==='Enter')sendChatMessage()" />
+              <button class="send-btn" onclick="sendChatMessage()">Send</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /content -->
+  </div><!-- /main -->
+</div><!-- /app -->
+
+<!-- ── ADD/EDIT FEATURE MODAL ── -->
+<div class="modal-overlay" id="modal-overlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal">
+    <div class="modal-title">
+      <span id="modal-title-text">Add feature</span>
+      <button class="modal-close" onclick="closeModal()">×</button>
+    </div>
+    <div class="form-two">
+      <div class="form-row">
+        <div class="form-label">Feature name *</div>
+        <input class="form-input" id="f-name" placeholder="e.g. Onboarding redesign">
+      </div>
+      <div class="form-row">
+        <div class="form-label">Status *</div>
+        <select class="form-select" id="f-status">
+          <option value="planned">Planned</option>
+          <option value="design">Design</option>
+          <option value="inprogress">In progress</option>
+          <option value="review">Review</option>
+          <option value="done">Done</option>
+          <option value="blocked">Blocked</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-two">
+      <div class="form-row">
+        <div class="form-label">Team</div>
+        <input class="form-input" id="f-team" placeholder="e.g. Dev + UI/UX">
+      </div>
+      <div class="form-row">
+        <div class="form-label">Owner</div>
+        <input class="form-input" id="f-owner" placeholder="e.g. Budi K.">
+      </div>
+    </div>
+    <div class="form-two">
+      <div class="form-row">
+        <div class="form-label">Priority</div>
+        <select class="form-select" id="f-priority">
+          <option value="High">High</option>
+          <option value="Medium" selected>Medium</option>
+          <option value="Low">Low</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <div class="form-label">Quarter</div>
+        <input class="form-input" id="f-quarter" placeholder="e.g. Q2 2026" value="Q2 2026">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-label">Due date</div>
+      <input class="form-input" id="f-due" placeholder="e.g. Apr 30">
+    </div>
+    <div class="form-row">
+      <div class="form-label">Figma link</div>
+      <input class="form-input" id="f-figma" placeholder="https://www.figma.com/file/..." oninput="previewFigma(this.value)">
+      <div class="figma-preview" id="figma-preview-text"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-label">Notes</div>
+      <textarea class="form-textarea" id="f-notes" placeholder="Blockers, context, dependencies..."></textarea>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveFeature()">Save feature</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── DATA ──
+let features = [];
+let chatHistory = [];
+let sheetUrl = localStorage.getItem('pm_sheet_url') || '';
+let editingIdx = null;
+let currentFilter = 'all';
+
+const labelMap = { inprogress:'In progress', design:'Design', planned:'Planned', done:'Done', review:'Review', blocked:'Blocked' };
+
+// ── DEMO DATA ──
+function loadDemoData() {
+  features = [
+    { name:'Onboarding redesign', team:'Dev + UI/UX', owner:'Budi K.', status:'inprogress', priority:'High', quarter:'Q2 2026', due:'Apr 15', figma:'', notes:'Core Q2 priority. Dev is at 62%.' },
+    { name:'Dashboard v2', team:'UI/UX', owner:'Sarah R.', status:'design', priority:'High', quarter:'Q2 2026', due:'Apr 30', figma:'https://www.figma.com/file/demo/dashboard-v2', notes:'Prototype approved, moving to final specs.' },
+    { name:'Export to PDF', team:'Dev', owner:'Dewi W.', status:'review', priority:'Medium', quarter:'Q2 2026', due:'Apr 20', figma:'', notes:'In code review, 1 PR open.' },
+    { name:'SSO integration', team:'Dev', owner:'Rizky H.', status:'blocked', priority:'High', quarter:'Q2 2026', due:'May 10', figma:'', notes:'Blocked: waiting for API keys from vendor. Escalated Apr 12.' },
+    { name:'Notification center', team:'All', owner:'Budi K.', status:'done', priority:'Medium', quarter:'Q2 2026', due:'Mar 30', figma:'', notes:'Shipped on time.' },
+    { name:'User profile v2', team:'UI/UX', owner:'Aditya M.', status:'design', priority:'Low', quarter:'Q2 2026', due:'May 20', figma:'', notes:'' },
+    { name:'Bulk actions', team:'Dev', owner:'Dewi W.', status:'planned', priority:'Medium', quarter:'Q2 2026', due:'May 30', figma:'', notes:'' },
+    { name:'Dark mode', team:'UI/UX + Dev', owner:'Sarah R.', status:'planned', priority:'Low', quarter:'Q2 2026', due:'Jun 30', figma:'', notes:'' },
+    { name:'Mobile app v1', team:'All', owner:'Budi K.', status:'planned', priority:'High', quarter:'Q3 2026', due:'Sep 30', figma:'', notes:'Kick-off in July.' },
+    { name:'Analytics module', team:'Dev + UI/UX', owner:'Sarah R.', status:'planned', priority:'High', quarter:'Q3 2026', due:'Aug 30', figma:'', notes:'' },
+    { name:'AI-assisted search', team:'Dev', owner:'Rizky H.', status:'planned', priority:'Medium', quarter:'Q3 2026', due:'Sep 15', figma:'', notes:'' },
+  ];
+  setSyncStatus('demo', 'Demo data loaded');
+  renderAll();
+  switchView('dashboard');
+  document.getElementById('setup-result').innerHTML = '<span style="color:var(--green)">Demo data loaded successfully.</span>';
+}
+
+// ── SHEET LOADING ──
+async function loadSheet() {
+  if (!sheetUrl) { setSyncStatus('error', 'No sheet connected'); return; }
+  setSyncStatus('loading', 'Loading...');
+  try {
+    const url = `https://corsproxy.io/?${encodeURIComponent(sheetUrl)}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('Fetch failed');
+    const text = await res.text();
+    features = parseCSV(text);
+    setSyncStatus('ok', 'Synced ' + new Date().toLocaleTimeString());
+    renderAll();
+  } catch(e) {
+    setSyncStatus('error', 'Could not load sheet — check URL & CORS proxy');
+  }
+}
+
+function parseCSV(text) {
+  const lines = text.trim().split('\n');
+  if (lines.length < 2) return [];
+  const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/\s+/g,'_').replace(/[^a-z_]/g,''));
+  return lines.slice(1).map(line => {
+    const cols = line.match(/(".*?"|[^,]+|(?<=,)(?=,)|(?<=,)$|^(?=,))/g) || [];
+    const obj = {};
+    headers.forEach((h, i) => { obj[h] = (cols[i] || '').replace(/^"|"$/g,'').trim(); });
+    return {
+      name: obj.name || obj.feature_name || '',
+      team: obj.team || '',
+      owner: obj.owner || '',
+      status: (obj.status || 'planned').toLowerCase().replace(/\s/g,''),
+      priority: obj.priority || 'Medium',
+      quarter: obj.quarter || '',
+      due: obj.due_date || obj.due || '',
+      figma: obj.figma_link || obj.figma || '',
+      notes: obj.notes || ''
+    };
+  }).filter(f => f.name);
+}
+
+function saveSheetConfig() {
+  const url = document.getElementById('sheet-url-input').value.trim();
+  const quarter = document.getElementById('quarter-input').value.trim();
+  if (quarter) document.getElementById('quarter-label').textContent = quarter;
+  if (!url) { document.getElementById('setup-result').innerHTML = '<span style="color:var(--red)">Please enter a sheet URL.</span>'; return; }
+  sheetUrl = url;
+  localStorage.setItem('pm_sheet_url', url);
+  loadSheet();
+}
+
+// ── SYNC STATUS ──
+function setSyncStatus(state, msg) {
+  ['sync-dot','sync-dot-top'].forEach(id => {
+    const el = document.getElementById(id);
+    if(!el) return;
+    el.className = 'sync-dot' + (state==='loading'?' loading':state==='error'?' error':'');
+  });
+  ['sync-text','sync-text-top'].forEach(id => { const el=document.getElementById(id); if(el) el.textContent=msg; });
+  document.getElementById('sync-status-top').style.display = 'flex';
+}
+
+// ── RENDER ALL ──
+function renderAll() {
+  renderMetrics();
+  renderDashActive();
+  renderDashProgress();
+  renderDashDeadlines();
+  renderFeatureList();
+  renderRoadmap();
+  renderTeam();
+  renderReport();
+  document.getElementById('feature-count').textContent = features.length;
+}
+
+// ── METRICS ──
+function renderMetrics() {
+  const currentQ = document.getElementById('quarter-label').textContent;
+  const qFeatures = features.filter(f => f.quarter === currentQ);
+  const total = qFeatures.length || features.length;
+  const src = qFeatures.length ? qFeatures : features;
+  document.getElementById('m-total').textContent = total;
+  document.getElementById('m-inprogress').textContent = src.filter(f=>f.status==='inprogress').length;
+  const done = src.filter(f=>f.status==='done').length;
+  document.getElementById('m-done').textContent = done;
+  document.getElementById('m-done-sub').textContent = done > 0 ? 'On track' : 'None yet';
+  const blocked = src.filter(f=>f.status==='blocked').length;
+  document.getElementById('m-blocked').textContent = blocked;
+  document.getElementById('m-blocked-sub').textContent = blocked > 0 ? 'Needs attention' : 'All clear';
+}
+
+// ── DASHBOARD ACTIVE ──
+function renderDashActive() {
+  const active = features.filter(f=>['inprogress','review','blocked','design'].includes(f.status)).slice(0,6);
+  const el = document.getElementById('dash-active-list');
+  if (!active.length) { el.innerHTML='<div style="color:var(--text3);font-size:13px;">No active features.</div>'; return; }
+  el.innerHTML = active.map(f => featureItemHTML(f, features.indexOf(f))).join('');
+}
+
+function featureItemHTML(f, idx) {
+  const figmaBtn = f.figma ? `<a href="${f.figma}" target="_blank" class="figma-btn" title="Open in Figma">Figma ↗</a>` : '';
+  return `<div class="feature-item" onclick="openEditModal(${idx})">
+    <div class="feature-dot d-${f.status}"></div>
+    <div class="feature-info">
+      <div class="feature-name">${escHtml(f.name)}</div>
+      <div class="feature-meta">${escHtml(f.team)} · ${escHtml(f.owner)} · Due ${escHtml(f.due)}</div>
+    </div>
+    <div class="feature-actions">${figmaBtn}<span class="badge b-${f.status}">${labelMap[f.status]||f.status}</span></div>
+  </div>`;
+}
+
+// ── DASHBOARD PROGRESS ──
+function renderDashProgress() {
+  const el = document.getElementById('dash-progress');
+  const teamGroups = {};
+  features.forEach(f => {
+    const teams = f.team.split(/[+,&]/).map(t=>t.trim()).filter(Boolean);
+    teams.forEach(t => {
+      if (!teamGroups[t]) teamGroups[t] = [];
+      teamGroups[t].push(f);
+    });
+  });
+  const colors = ['#185FA5','#534AB7','#0F6E56','#854F0B','#A32D2D'];
+  let html = '';
+  Object.entries(teamGroups).slice(0,5).forEach(([team, items], i) => {
+    const done = items.filter(f=>f.status==='done').length;
+    const pct = items.length ? Math.round((done + items.filter(f=>f.status==='review').length * 0.75 + items.filter(f=>f.status==='inprogress').length * 0.5) / items.length * 100) : 0;
+    html += `<div style="margin-bottom:14px;">
+      <div style="display:flex;justify-content:space-between;margin-bottom:5px;"><span style="font-size:12px;color:var(--text2);">${escHtml(team)}</span><span style="font-size:12px;font-weight:500;">${pct}%</span></div>
+      <div class="progress-bar"><div class="progress-fill" style="width:${pct}%;background:${colors[i%colors.length]};"></div></div>
+    </div>`;
+  });
+  el.innerHTML = html || '<div style="color:var(--text3);font-size:13px;">No team data yet.</div>';
+}
+
+// ── DEADLINES ──
+function renderDashDeadlines() {
+  const el = document.getElementById('dash-deadlines');
+  const upcoming = features.filter(f=>f.due && f.status!=='done').slice(0,6);
+  if (!upcoming.length) { el.innerHTML='<div style="color:var(--text3);font-size:13px);">No upcoming deadlines.</div>'; return; }
+  el.innerHTML = upcoming.map(f=>`
+    <div style="background:var(--bg2);border-radius:8px;padding:12px;border:1px solid var(--border);">
+      <div style="font-size:10px;color:var(--text3);margin-bottom:3px;">${escHtml(f.due)}</div>
+      <div style="font-size:13px;font-weight:500;color:var(--text);">${escHtml(f.name)}</div>
+      <div style="font-size:11px;color:var(--text3);margin-top:2px;">${escHtml(f.owner)}</div>
+    </div>`).join('');
+}
+
+// ── FEATURE LIST ──
+function renderFeatureList() {
+  const filtered = currentFilter==='all' ? features : features.filter(f=>f.status===currentFilter);
+  const el = document.getElementById('feature-list');
+  if (!filtered.length) { el.innerHTML='<div style="color:var(--text3);font-size:13px;">No features match this filter.</div>'; return; }
+  el.innerHTML = filtered.map(f => featureItemHTML(f, features.indexOf(f))).join('');
+}
+
+function filterFeatures(status, btn) {
+  currentFilter = status;
+  document.querySelectorAll('.filter-pill').forEach(p=>p.classList.remove('active'));
+  btn.classList.add('active');
+  renderFeatureList();
+}
+
+// ── ROADMAP ──
+function renderRoadmap() {
+  const byQ = {};
+  features.forEach(f => { if (!byQ[f.quarter]) byQ[f.quarter]=[] ; byQ[f.quarter].push(f); });
+  const el = document.getElementById('roadmap-content');
+  if (!Object.keys(byQ).length) { el.innerHTML='<div style="color:var(--text3);font-size:13px;">No roadmap data yet.</div>'; return; }
+  const currentQ = document.getElementById('quarter-label').textContent;
+  el.innerHTML = Object.entries(byQ).map(([q, items]) => `
+    <div class="roadmap-q">
+      <div class="roadmap-q-header">${escHtml(q)} <span class="badge roadmap-q-badge ${q===currentQ?'b-inprogress':'b-planned'}">${q===currentQ?'Current quarter':'Planned'}</span></div>
+      ${items.map(f=>`
+        <div class="timeline-row" onclick="openEditModal(${features.indexOf(f)})">
+          <div class="timeline-q">${escHtml(f.due ? f.due.substring(0,3) : '—')}</div>
+          <div class="timeline-info">
+            <div class="timeline-name">${escHtml(f.name)}</div>
+            <div class="timeline-team">${escHtml(f.team)} · ${escHtml(f.owner)}</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;">
+            ${f.figma?`<a href="${f.figma}" target="_blank" class="figma-btn" onclick="event.stopPropagation()">Figma ↗</a>`:''}
+            <span class="badge b-${f.status}">${labelMap[f.status]||f.status}</span>
+          </div>
+        </div>`).join('')}
+    </div>`).join('');
+}
+
+// ── TEAM ──
+function renderTeam() {
+  const owners = {};
+  features.forEach(f => {
+    if (!f.owner) return;
+    if (!owners[f.owner]) owners[f.owner] = { features: [], team: f.team };
+    owners[f.owner].features.push(f);
+  });
+  const avColors = ['#E6F1FB:#0C447C','#EEEDFE:#3C3489','#E1F5EE:#085041','#FAEEDA:#633806','#FCEBEB:#791F1F','#EAF3DE:#27500A'];
+  let avIdx = 0;
+  const memberHTML = (name, info) => {
+    const [bg, color] = avColors[avIdx++ % avColors.length].split(':');
+    const initials = name.split(' ').map(w=>w[0]).join('').substring(0,2).toUpperCase();
+    const active = info.features.filter(f=>f.status!=='done'&&f.status!=='planned').length;
+    return `<div class="team-row-item">
+      <div class="team-av" style="background:${bg};color:${color};">${initials}</div>
+      <div class="team-info" style="flex:1"><div class="team-name">${escHtml(name)}</div><div class="team-role">${escHtml(info.team.split(/[+,]/)[0].trim())}</div></div>
+      <span class="badge b-inprogress">${active} active</span>
+    </div>`;
+  };
+  const all = Object.entries(owners).map(e => memberHTML(...e)).join('') || '<div style="color:var(--text3);font-size:13px;">No owner data.</div>';
+  const devOwners = Object.entries(owners).filter(([,i])=>i.team.toLowerCase().includes('dev'));
+  const uiOwners = Object.entries(owners).filter(([,i])=>i.team.toLowerCase().includes('ui'));
+  document.getElementById('team-dev').innerHTML = devOwners.map(e=>memberHTML(...e)).join('') || all;
+  document.getElementById('team-uiux').innerHTML = uiOwners.map(e=>memberHTML(...e)).join('') || '<div style="color:var(--text3);font-size:13px;">Tag UI/UX team in Team column to filter.</div>';
+  document.getElementById('team-all').innerHTML = all;
+}
+
+// ── VP REPORT ──
+function renderReport() {
+  const currentQ = document.getElementById('quarter-label').textContent;
+  const qF = features.filter(f=>f.quarter===currentQ);
+  const src = qF.length ? qF : features;
+  const done = src.filter(f=>f.status==='done');
+  const blocked = src.filter(f=>f.status==='blocked');
+  const inprogress = src.filter(f=>f.status==='inprogress');
+  document.getElementById('report-quarter').textContent = currentQ;
+  document.getElementById('report-stats').innerHTML = [
+    ['Quarter', currentQ],
+    ['Features committed', src.length],
+    ['Completed', `${done.length} of ${src.length}`],
+    ['In progress', inprogress.length],
+    ['Blocked', blocked.length > 0 ? `${blocked.length} — needs attention` : '0 — all clear'],
+  ].map(([k,v])=>`<div class="report-stat"><span class="report-key">${k}</span><span class="report-val" style="${k==='Blocked'&&blocked.length?'color:var(--red)':''}">${v}</span></div>`).join('');
+
+  document.getElementById('report-highlights').innerHTML = done.map(f=>`✓ ${f.name} shipped`).join('<br>') || 'No completed features yet.';
+  document.getElementById('report-risks').innerHTML = blocked.map(f=>`⚠ ${f.name}${f.notes?' — '+f.notes:''}`).join('<br>') || 'No blockers currently.';
+  document.getElementById('report-breakdown').innerHTML = `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;">` +
+    Object.entries(labelMap).map(([s,l])=>{
+      const count = src.filter(f=>f.status===s).length;
+      return `<div style="background:var(--bg2);border-radius:8px;padding:12px;border:1px solid var(--border);"><div style="font-size:10px;color:var(--text3);margin-bottom:4px;">${l}</div><div style="font-size:20px;font-weight:600;color:var(--text);">${count}</div></div>`;
+    }).join('') + '</div>';
+}
+
+function printReport() { window.print(); }
+
+// ── MODAL ──
+function openAddModal() {
+  editingIdx = null;
+  document.getElementById('modal-title-text').textContent = 'Add feature';
+  ['name','team','owner','due','figma','notes'].forEach(k => { document.getElementById('f-'+k).value = ''; });
+  document.getElementById('f-status').value = 'planned';
+  document.getElementById('f-priority').value = 'Medium';
+  document.getElementById('f-quarter').value = document.getElementById('quarter-label').textContent;
+  document.getElementById('figma-preview-text').innerHTML = '';
+  document.getElementById('modal-overlay').classList.add('open');
+}
+
+function openEditModal(idx) {
+  const f = features[idx];
+  if (!f) return;
+  editingIdx = idx;
+  document.getElementById('modal-title-text').textContent = 'Edit feature';
+  document.getElementById('f-name').value = f.name;
+  document.getElementById('f-team').value = f.team;
+  document.getElementById('f-owner').value = f.owner;
+  document.getElementById('f-status').value = f.status;
+  document.getElementById('f-priority').value = f.priority;
+  document.getElementById('f-quarter').value = f.quarter;
+  document.getElementById('f-due').value = f.due;
+  document.getElementById('f-figma').value = f.figma;
+  document.getElementById('f-notes').value = f.notes;
+  previewFigma(f.figma);
+  document.getElementById('modal-overlay').classList.add('open');
+}
+
+function closeModal() { document.getElementById('modal-overlay').classList.remove('open'); }
+
+function saveFeature() {
+  const f = {
+    name: document.getElementById('f-name').value.trim(),
+    team: document.getElementById('f-team').value.trim(),
+    owner: document.getElementById('f-owner').value.trim(),
+    status: document.getElementById('f-status').value,
+    priority: document.getElementById('f-priority').value,
+    quarter: document.getElementById('f-quarter').value.trim(),
+    due: document.getElementById('f-due').value.trim(),
+    figma: document.getElementById('f-figma').value.trim(),
+    notes: document.getElementById('f-notes').value.trim(),
+  };
+  if (!f.name) { alert('Feature name is required.'); return; }
+  if (editingIdx !== null) { features[editingIdx] = f; } else { features.push(f); }
+  closeModal();
+  renderAll();
+}
+
+function previewFigma(url) {
+  const el = document.getElementById('figma-preview-text');
+  if (url && url.includes('figma.com')) {
+    el.innerHTML = `Valid Figma link — <a href="${url}" target="_blank">open to preview ↗</a>`;
+  } else if (url) {
+    el.textContent = 'Custom URL will be saved as-is.';
+  } else {
+    el.textContent = '';
+  }
+}
+
+// ── CHAT ──
+async function sendChatMessage() {
+  const input = document.getElementById('chat-input');
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+  addMsg('user', text);
+  chatHistory.push({ role:'user', content:text });
+  const loadId = addLoadingMsg();
+  const context = buildContext();
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1000,
+        system: context,
+        messages: chatHistory
+      })
+    });
+    const data = await res.json();
+    removeLoadingMsg(loadId);
+    const reply = (data.content || []).map(i=>i.text||'').join('');
+    chatHistory.push({ role:'assistant', content:reply });
+    addMsg('ai', reply);
+  } catch(e) {
+    removeLoadingMsg(loadId);
+    addMsg('ai', 'Could not reach the AI. Check your connection and try again.');
+  }
+}
+
+function buildContext() {
+  const currentQ = document.getElementById('quarter-label').textContent;
+  const qF = features.filter(f=>f.quarter===currentQ);
+  return `You are a helpful AI assistant for a Product Manager working with a UI/UX team and development team, reporting to a VP.
+Current quarter: ${currentQ}.
+Feature data: ${JSON.stringify(features.slice(0,30))}.
+Current quarter features: ${qF.length}. Blocked: ${qF.filter(f=>f.status==='blocked').length}. Done: ${qF.filter(f=>f.status==='done').length}.
+Be concise, actionable, and focused. Use bullet points for lists. Format VP reports professionally. Speak like a real PM partner.`;
+}
+
+function sendQuick(text) { document.getElementById('chat-input').value = text; sendChatMessage(); }
+
+function addMsg(role, text) {
+  const el = document.getElementById('chat-messages');
+  const div = document.createElement('div');
+  div.className = 'msg' + (role==='user' ? ' user' : '');
+  div.innerHTML = `<div class="msg-av av-${role==='ai'?'ai':'user'}">${role==='ai'?'AI':'PM'}</div><div class="msg-bubble">${text.replace(/\n/g,'<br>').replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>')}</div>`;
+  el.appendChild(div);
+  el.scrollTop = el.scrollHeight;
+}
+
+function addLoadingMsg() {
+  const el = document.getElementById('chat-messages');
+  const div = document.createElement('div');
+  div.className = 'msg';
+  const id = 'ld-' + Date.now();
+  div.id = id;
+  div.innerHTML = `<div class="msg-av av-ai">AI</div><div class="msg-bubble"><div class="loading-dots"><span></span><span></span><span></span></div></div>`;
+  el.appendChild(div);
+  el.scrollTop = el.scrollHeight;
+  return id;
+}
+
+function removeLoadingMsg(id) { const el=document.getElementById(id); if(el) el.remove(); }
+
+function generateAiReport() { switchView('chat'); sendQuick('Generate a complete, professional executive VP report for this quarter. Include: overview, highlights, risks and blockers, team performance, and Q3 planning preview.'); }
+
+// ── VIEW SWITCHING ──
+const viewTitles = { dashboard:'Dashboard', features:'Feature tracker', roadmap:'Roadmap', team:'Team', report:'VP Report', chat:'AI Assistant', setup:'Settings' };
+function switchView(v) {
+  document.querySelectorAll('.view').forEach(el=>el.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(el=>el.classList.remove('active'));
+  document.getElementById('view-'+v).classList.add('active');
+  document.getElementById('view-title').textContent = viewTitles[v] || v;
+  const navTexts = { dashboard:'Dashboard', features:'Features', roadmap:'Roadmap', team:'Team', report:'VP', chat:'AI' };
+  document.querySelectorAll('.nav-item').forEach(el => {
+    if (navTexts[v] && el.textContent.includes(navTexts[v])) el.classList.add('active');
+  });
+}
+
+// ── HELPERS ──
+function escHtml(str) {
+  return (str||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── INIT ──
+if (sheetUrl) {
+  document.getElementById('sheet-url-input').value = sheetUrl;
+  loadSheet();
+} else {
+  loadDemoData();
+}
+</script>
+</body>
+</html>
