@@ -539,47 +539,76 @@ function defaultSquads() {
 }
 
 // ── FIREBASE ──
+function withTimeout(promise, ms, label) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error(`Timeout: ${label} took >${ms}ms`)), ms))
+  ]);
+}
+
 async function connectFirebase(cfg) {
-  const { initializeApp, getApps } = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js');
+  const { initializeApp, getApps } = await withTimeout(
+    import('https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js'), 8000, 'load firebase-app');
   const { getFirestore, collection, onSnapshot, doc, setDoc, deleteDoc, getDocs } =
-    await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
+    await withTimeout(
+    import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js'), 8000, 'load firestore');
 
   const app = getApps().length ? getApps()[0] : initializeApp(cfg);
   db = getFirestore(app);
 
-  // Upload local data to Firebase if it's empty
-  const fSnap = await getDocs(collection(db, 'features'));
-  if (fSnap.empty && features.length > 0) {
-    for (const f of features) await setDoc(doc(collection(db,'features'), f.id), f);
-  }
-  const mSnap = await getDocs(collection(db, 'members'));
-  if (mSnap.empty && members.length > 0) {
-    for (const m of members) await setDoc(doc(collection(db,'members'), m.id), m);
-  }
-  const sSnap = await getDocs(collection(db, 'squads'));
-  if (sSnap.empty && squads.length > 0) {
-    for (const s of squads) await setDoc(doc(collection(db,'squads'), s.id), s);
-  }
-
-  // Real-time listeners
+  // Use onSnapshot directly — it fires immediately with cached data,
+  // then syncs from server. No getDocs blocking calls needed.
   if (fbUnsubscribe) fbUnsubscribe();
-  const u1 = onSnapshot(collection(db,'features'), s => { features=s.docs.map(d=>d.data()); renderAll(); setSyncStatus('ok','Live · '+new Date().toLocaleTimeString()); });
-  const u2 = onSnapshot(collection(db,'members'),  s => { members=s.docs.map(d=>d.data()); renderTeam(); refreshDropdowns(); });
-  const u3 = onSnapshot(collection(db,'squads'),   s => { squads=s.docs.map(d=>d.data()); renderTeam(); refreshDropdowns(); });
-  fbUnsubscribe = () => { u1(); u2(); u3(); };
 
+  let firstLoad = { f: false, m: false, s: false };
+
+  const u1 = onSnapshot(collection(db,'features'), snap => {
+    features = snap.docs.map(d => d.data());
+    firstLoad.f = true;
+    renderAll();
+    setSyncStatus('ok', 'Live · ' + new Date().toLocaleTimeString());
+  }, err => { console.warn('features snapshot error', err); });
+
+  const u2 = onSnapshot(collection(db,'members'), snap => {
+    members = snap.docs.map(d => d.data());
+    firstLoad.m = true;
+    renderTeam(); refreshDropdowns();
+  }, err => { console.warn('members snapshot error', err); });
+
+  const u3 = onSnapshot(collection(db,'squads'), snap => {
+    squads = snap.docs.map(d => d.data());
+    if (!squads.length) squads = defaultSquads();
+    firstLoad.s = true;
+    renderTeam(); refreshDropdowns();
+  }, err => { console.warn('squads snapshot error', err); });
+
+  fbUnsubscribe = () => { u1(); u2(); u3(); };
   window._fb = { collection, doc, setDoc, deleteDoc, db };
+
+  // Wait up to 6s for first snapshot — if it arrives we're connected
+  await withTimeout(new Promise(resolve => {
+    const check = setInterval(() => {
+      if (firstLoad.f && firstLoad.m && firstLoad.s) { clearInterval(check); resolve(); }
+    }, 100);
+  }), 6000, 'first snapshot');
 }
 
 async function tryConnectFirebase(cfg) {
   try {
     await connectFirebase(cfg);
     localStorage.setItem(FB_KEY, JSON.stringify(cfg));
-    setSyncStatus('ok','Firebase · live');
+    setSyncStatus('ok', 'Firebase · live');
     setStorageLabel('Firebase (real-time sync)');
     return true;
   } catch(e) {
     console.warn('Firebase connect failed:', e.message);
+    if (db) {
+      // SDK loaded but snapshots timed out — still set up listeners, just warn
+      setSyncStatus('ok', 'Firebase · syncing...');
+      setStorageLabel('Firebase (reconnecting)');
+      localStorage.setItem(FB_KEY, JSON.stringify(cfg));
+      return true;
+    }
     return false;
   }
 }
@@ -1158,15 +1187,26 @@ loadLocal();
 // Priority: 1) BAKED_CONFIG in file, 2) localStorage saved config
 const fbCfg = BAKED_CONFIG || (() => { try { return JSON.parse(localStorage.getItem(FB_KEY)); } catch(e){ return null; } })();
 
+// Always render immediately with local data — never block the UI
+renderAll();
+
 if (fbCfg && fbCfg.apiKey) {
-  setSyncStatus('loading','Connecting to Firebase...');
-  tryConnectFirebase(fbCfg).then(ok=>{
-    if (!ok) { setSyncStatus('ok','Local storage (Firebase failed)'); renderAll(); }
-    else { renderAll(); }
+  setSyncStatus('loading', 'Connecting...');
+  // Connect in background — UI is already usable
+  tryConnectFirebase(fbCfg).then(ok => {
+    if (!ok) {
+      setSyncStatus('error', 'Firebase unreachable — using local data');
+      setStorageLabel('Local storage (offline)');
+      // Clear saved config so we don't retry on next load if it keeps failing
+      // (but keep BAKED_CONFIG working)
+      if (!BAKED_CONFIG) localStorage.removeItem(FB_KEY);
+    }
+  }).catch(e => {
+    setSyncStatus('error', 'Firebase error');
+    console.error(e);
   });
 } else {
-  setSyncStatus('ok','Local storage');
-  renderAll();
+  setSyncStatus('ok', 'Local storage');
 }
 
 // Expose to inline handlers
