@@ -1087,8 +1087,7 @@ function addMsg(role,text) {
   const el=document.getElementById('chat-msgs');
   const d=document.createElement('div');
   d.className='msg'+(role==='user'?' user':'');
-  d.innerHTML=`<div class="msg-av av-${role==='ai'?'ai':'user'}">${role==='ai'?'AI':'PM'}</div><div class="msg-bubble">${text.replace(/
-/g,'<br>').replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>')}</div>`;
+  d.innerHTML=`<div class="msg-av av-${role==='ai'?'ai':'user'}">${role==='ai'?'AI':'PM'}</div><div class="msg-bubble">${text.split('\n').join('<br>').replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>')}</div>`;
   el.appendChild(d); el.scrollTop=el.scrollHeight;
 }
 function addLoader() {
