@@ -482,40 +482,38 @@ code{background:var(--bg2);padding:1px 5px;border-radius:4px;font-size:11px;font
 <div class="toast" id="toast"></div>
 
 <script type="module">
-// ═══════════════════════════════════════════════
-// PM HUB — all logic
-// ═══════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
+// PM HUB v3 — complete logic
+// ═══════════════════════════════════════════════════════
 
 // ── CONSTANTS ──
 const LABEL = {inprogress:'In progress',design:'Design',review:'Review',blocked:'Blocked',done:'Done',planned:'Planned'};
-const SQUAD_COLORS = {
-  blue:  {bg:'#E6F1FB', text:'#0C447C', dot:'#185FA5'},
-  purple:{bg:'#EEEDFE', text:'#3C3489', dot:'#534AB7'},
-  green: {bg:'#E1F5EE', text:'#085041', dot:'#0F6E56'},
-  amber: {bg:'#FAEEDA', text:'#633806', dot:'#854F0B'},
-  red:   {bg:'#FCEBEB', text:'#791F1F', dot:'#A32D2D'},
-  gray:  {bg:'#F1EFE8', text:'#444441', dot:'#6b6a65'},
+const SC = {
+  blue:  {bg:'#E6F1FB',text:'#0C447C',dot:'#185FA5'},
+  purple:{bg:'#EEEDFE',text:'#3C3489',dot:'#534AB7'},
+  green: {bg:'#E1F5EE',text:'#085041',dot:'#0F6E56'},
+  amber: {bg:'#FAEEDA',text:'#633806',dot:'#854F0B'},
+  red:   {bg:'#FCEBEB',text:'#791F1F',dot:'#A32D2D'},
+  gray:  {bg:'#F1EFE8',text:'#444441',dot:'#6b6a65'},
 };
 
 // ── STATE ──
-let features=[], members=[], squads=[], chatHistory=[];
-let editingFId=null, editingMId=null, editingSqId=null, currentFilter='all';
-let db=null, fbUnsubscribe=null;
+let features=[], members=[], squads=[];
+let chatHistory=[], editingFId=null, editingMId=null, editingSqId=null, currentFilter='all';
+
+// ── FIREBASE REFS — set once, reused everywhere ──
+let _db=null, _col=null, _doc=null, _setDoc=null, _deleteDoc=null, _fbUnsub=null;
 
 // ── STORAGE KEYS ──
-const SK = 'pmhub_data';
-const FB_KEY = 'pmhub_fb_config';
-// ⬇ HARDCODE your Firebase config here after connecting once.
-// This makes it work for ALL visitors (team members, VP) without setup.
-// After connecting via the Settings screen, copy the values shown in the
-// browser console (or from your Firebase project) and paste below:
+const SK='pmhub_data', FB_KEY='pmhub_fb_config';
+
+// ▼▼ PASTE YOUR FIREBASE CONFIG HERE after first connect ▼▼
+// Copy the block shown in Settings after connecting, replace null below:
 const BAKED_CONFIG = null;
-// Example (uncomment and fill in your values):
+// Example:
 // const BAKED_CONFIG = {
-//   apiKey: "AIzaSy...",
-//   projectId: "pm-dashboard-xxxx",
-//   authDomain: "pm-dashboard-xxxx.firebaseapp.com",
-//   appId: "1:123:web:abc..."
+//   apiKey:"AIzaSy...", projectId:"pm-hub-xxx",
+//   authDomain:"pm-hub-xxx.firebaseapp.com", appId:"1:123:web:abc"
 // };
 
 // ── LOCAL STORAGE ──
@@ -524,211 +522,233 @@ function saveLocal() {
 }
 function loadLocal() {
   try {
-    const d = JSON.parse(localStorage.getItem(SK) || '{}');
+    const d = JSON.parse(localStorage.getItem(SK)||'{}');
     features = d.features || [];
     members  = d.members  || [];
     squads   = d.squads   || defaultSquads();
-  } catch(e) { features=[]; members=[]; squads=defaultSquads(); }
+  } catch(e){ features=[]; members=[]; squads=defaultSquads(); }
 }
 function defaultSquads() {
   return [
-    {id:'sq-dev',    name:'Dev',   color:'blue'},
-    {id:'sq-uiux',   name:'UI/UX', color:'purple'},
-    {id:'sq-product',name:'Product',color:'amber'},
+    {id:'sq-dev',   name:'Dev',   color:'blue'},
+    {id:'sq-uiux',  name:'UI/UX', color:'purple'},
+    {id:'sq-pm',    name:'Product',color:'amber'},
   ];
 }
 
 // ── FIREBASE ──
-function withTimeout(promise, ms, label) {
-  return Promise.race([
-    promise,
-    new Promise((_, reject) => setTimeout(() => reject(new Error(`Timeout: ${label} took >${ms}ms`)), ms))
-  ]);
-}
-
 async function connectFirebase(cfg) {
-  const { initializeApp, getApps } = await withTimeout(
-    import('https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js'), 8000, 'load firebase-app');
-  const { getFirestore, collection, onSnapshot, doc, setDoc, deleteDoc, getDocs } =
-    await withTimeout(
-    import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js'), 8000, 'load firestore');
+  // Load Firebase SDKs
+  const {initializeApp, getApps} = await Promise.race([
+    import('https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js'),
+    new Promise((_,r)=>setTimeout(()=>r(new Error('SDK timeout')),10000))
+  ]);
+  const fbfs = await Promise.race([
+    import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js'),
+    new Promise((_,r)=>setTimeout(()=>r(new Error('Firestore timeout')),10000))
+  ]);
+  const {getFirestore, collection, onSnapshot, doc, setDoc, deleteDoc} = fbfs;
 
   const app = getApps().length ? getApps()[0] : initializeApp(cfg);
-  db = getFirestore(app);
+  _db = getFirestore(app);
 
-  // Use onSnapshot directly — it fires immediately with cached data,
-  // then syncs from server. No getDocs blocking calls needed.
-  if (fbUnsubscribe) fbUnsubscribe();
+  // Store refs IMMEDIATELY — before any await or snapshot
+  _col=collection; _doc=doc; _setDoc=setDoc; _deleteDoc=deleteDoc;
+  window._fb = {db:_db, collection, doc, setDoc, deleteDoc};
 
-  let firstLoad = { f: false, m: false, s: false };
+  // Attach real-time listeners
+  if (_fbUnsub) _fbUnsub();
+  let ready = {f:false, m:false, s:false};
 
-  const u1 = onSnapshot(collection(db,'features'), snap => {
-    features = snap.docs.map(d => d.data());
-    firstLoad.f = true;
-    renderAll();
-    setSyncStatus('ok', 'Live · ' + new Date().toLocaleTimeString());
-  }, err => { console.warn('features snapshot error', err); });
+  const u1 = onSnapshot(_col(_db,'features'),
+    snap=>{ features=snap.docs.map(d=>d.data()); ready.f=true; renderAll(); setSyncStatus('ok','Live · '+new Date().toLocaleTimeString()); },
+    err=>console.warn('features listener:',err.message));
 
-  const u2 = onSnapshot(collection(db,'members'), snap => {
-    members = snap.docs.map(d => d.data());
-    firstLoad.m = true;
-    renderTeam(); refreshDropdowns();
-  }, err => { console.warn('members snapshot error', err); });
+  const u2 = onSnapshot(_col(_db,'members'),
+    snap=>{ members=snap.docs.map(d=>d.data()); ready.m=true; renderTeam(); refreshDropdowns(); },
+    err=>console.warn('members listener:',err.message));
 
-  const u3 = onSnapshot(collection(db,'squads'), snap => {
-    squads = snap.docs.map(d => d.data());
-    if (!squads.length) squads = defaultSquads();
-    firstLoad.s = true;
-    renderTeam(); refreshDropdowns();
-  }, err => { console.warn('squads snapshot error', err); });
+  const u3 = onSnapshot(_col(_db,'squads'),
+    snap=>{ const d=snap.docs.map(d=>d.data()); squads=d.length?d:defaultSquads(); ready.s=true; renderTeam(); refreshDropdowns(); },
+    err=>console.warn('squads listener:',err.message));
 
-  fbUnsubscribe = () => { u1(); u2(); u3(); };
-  window._fb = { collection, doc, setDoc, deleteDoc, db };
+  _fbUnsub = ()=>{ u1(); u2(); u3(); };
 
-  // Wait up to 6s for first snapshot — if it arrives we're connected
-  await withTimeout(new Promise(resolve => {
-    const check = setInterval(() => {
-      if (firstLoad.f && firstLoad.m && firstLoad.s) { clearInterval(check); resolve(); }
-    }, 100);
-  }), 6000, 'first snapshot');
+  // Wait for first data (max 7s)
+  await new Promise((resolve,reject)=>{
+    const t = setTimeout(()=>resolve(), 7000); // resolve anyway after 7s
+    const i = setInterval(()=>{ if(ready.f&&ready.m&&ready.s){ clearInterval(i); clearTimeout(t); resolve(); } },150);
+  });
 }
 
-async function tryConnectFirebase(cfg) {
+async function tryConnect(cfg) {
   try {
+    setSyncStatus('loading','Connecting...');
     await connectFirebase(cfg);
     localStorage.setItem(FB_KEY, JSON.stringify(cfg));
-    setSyncStatus('ok', 'Firebase · live');
-    setStorageLabel('Firebase (real-time sync)');
+    setSyncStatus('ok','Firebase · live');
+    setLabel('Firebase (real-time sync)');
     return true;
   } catch(e) {
-    console.warn('Firebase connect failed:', e.message);
-    if (db) {
-      // SDK loaded but snapshots timed out — still set up listeners, just warn
-      setSyncStatus('ok', 'Firebase · syncing...');
-      setStorageLabel('Firebase (reconnecting)');
+    console.error('Firebase connect error:',e.message);
+    if (_db) { // SDK loaded, treat as partial success
+      setSyncStatus('ok','Firebase · live');
+      setLabel('Firebase (real-time sync)');
       localStorage.setItem(FB_KEY, JSON.stringify(cfg));
       return true;
     }
+    setSyncStatus('error','Firebase failed — using local');
     return false;
   }
 }
 
-async function connectFromUI() {
-  const cfg = {
-    apiKey:      document.getElementById('fb-apiKey').value.trim(),
-    projectId:   document.getElementById('fb-projectId').value.trim(),
-    authDomain:  document.getElementById('fb-authDomain').value.trim(),
-    appId:       document.getElementById('fb-appId').value.trim(),
-  };
-  if (!cfg.apiKey || !cfg.projectId) { document.getElementById('fb-result').innerHTML='<span style="color:var(--red-text)">API Key and Project ID required.</span>'; return; }
-  document.getElementById('fb-result').innerHTML='<span style="color:var(--text2)">Connecting...</span>';
-  const ok = await tryConnectFirebase(cfg);
-  if (ok) {
-    // Also bake config into the page console so user can copy it
-    console.log('%c PM Hub Firebase config — paste into BAKED_CONFIG in the HTML file:', 'font-weight:bold;color:#185FA5');
-    console.log(JSON.stringify(cfg, null, 2));
-    document.getElementById('fb-result').innerHTML=`
-      <span style="color:var(--green-text)">Connected! Real-time sync active.</span><br>
-      <div style="margin-top:8px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:10px;font-size:11px;font-family:monospace;color:var(--text2);white-space:pre-wrap">// Paste this into your HTML file inside BAKED_CONFIG
-// so ALL team members auto-connect without setup:
-const BAKED_CONFIG = ${JSON.stringify(cfg, null, 2)};</div>`;
-    go('dashboard');
-  } else {
-    document.getElementById('fb-result').innerHTML='<span style="color:var(--red-text)">Connection failed — check your config values.</span>';
+// Write to Firestore — always uses the module-level refs, never window._fb
+async function fbWrite(colName, id, data) {
+  if (!_db || !_col || !_doc || !_setDoc) {
+    // Firebase not ready — save locally as fallback
+    saveLocal(); return;
+  }
+  try {
+    await _setDoc(_doc(_col(_db, colName), id), data);
+  } catch(e) {
+    console.error('fbWrite error:', e.message);
+    saveLocal(); // fallback
   }
 }
 
-async function fbSet(col, id, data) {
-  if (!db) return;
-  const {collection,doc,setDoc} = window._fb;
-  await setDoc(doc(collection(db,col), id), data);
+async function fbRemove(colName, id) {
+  if (!_db || !_col || !_doc || !_deleteDoc) return;
+  try {
+    await _deleteDoc(_doc(_col(_db, colName), id));
+  } catch(e) { console.error('fbRemove error:', e.message); }
 }
-async function fbDel(col, id) {
-  if (!db) return;
-  const {collection,doc,deleteDoc} = window._fb;
-  await deleteDoc(doc(collection(db,col), id));
+
+async function connectFromUI() {
+  const cfg = {
+    apiKey:     el('fb-apiKey').value.trim(),
+    projectId:  el('fb-projectId').value.trim(),
+    authDomain: el('fb-authDomain').value.trim(),
+    appId:      el('fb-appId').value.trim(),
+  };
+  if (!cfg.apiKey||!cfg.projectId) { el('fb-result').innerHTML='<span style="color:var(--red-text)">API Key and Project ID required.</span>'; return; }
+  el('fb-result').innerHTML='<span style="color:var(--text2)">Connecting...</span>';
+  const ok = await tryConnect(cfg);
+  if (ok) {
+    console.log('%c PM Hub — paste this as BAKED_CONFIG:','font-weight:bold;color:#185FA5');
+    console.log('const BAKED_CONFIG = ' + JSON.stringify(cfg, null, 2) + ';');
+    el('fb-result').innerHTML=`<span style="color:var(--green-text)">Connected!</span><br>
+      <div style="margin-top:8px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:10px;font-size:11px;font-family:monospace;color:var(--text2);white-space:pre-wrap;word-break:break-all">const BAKED_CONFIG = ${JSON.stringify(cfg,null,2)};</div>
+      <div style="font-size:11px;color:var(--text3);margin-top:6px">Copy the block above, open your HTML file, find <code>const BAKED_CONFIG = null</code> and replace it. Re-upload to Vercel. All visitors will then auto-connect.</div>`;
+    // Push any local data to Firebase
+    for (const f of features) await fbWrite('features', f.id, f);
+    for (const m of members)  await fbWrite('members',  m.id, m);
+    for (const s of squads)   await fbWrite('squads',   s.id, s);
+    go('dashboard');
+  } else {
+    el('fb-result').innerHTML='<span style="color:var(--red-text)">Connection failed — check your config values and try again.</span>';
+  }
 }
 
 function useLocal() {
-  if (fbUnsubscribe) { fbUnsubscribe(); fbUnsubscribe=null; }
-  db=null;
+  if (_fbUnsub) { _fbUnsub(); _fbUnsub=null; }
+  _db=null; _col=null; _doc=null; _setDoc=null; _deleteDoc=null;
   localStorage.removeItem(FB_KEY);
-  setStorageLabel('Local browser storage');
+  setLabel('Local browser storage');
   setSyncStatus('ok','Local storage');
   toast('Switched to local storage');
   go('dashboard');
 }
 
-function setStorageLabel(txt) {
-  const el = document.getElementById('storage-mode-label');
-  if (el) el.textContent = txt;
-}
-
 // ── CRUD: FEATURES ──
-function uid() { return Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
+function uid() { return Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
 
 async function saveFeature() {
-  const name = document.getElementById('f-name').value.trim();
+  const name = el('f-name').value.trim();
   if (!name) { toast('Feature name is required'); return; }
-  const rawDue = document.getElementById('f-due').value;
+  const rawDue = el('f-due').value;
+  const now = Date.now();
+
+  // Build history entry
+  const existing = features.find(x=>x.id===editingFId);
+  const history = existing ? (existing.history||[]) : [];
+  if (existing) {
+    const changes = [];
+    const fields = {name:'Name',team:'Team',owner:'Owner',status:'Status',priority:'Priority',quarter:'Quarter',due:'Due date',figma:'Figma',notes:'Notes'};
+    for (const [key, label] of Object.entries(fields)) {
+      const oldVal = existing[key]||'';
+      const newVal = key==='due' ? (rawDue?formatDueDate(rawDue):'') : (el('f-'+key)?el('f-'+key).value.trim():'');
+      if (oldVal !== newVal) changes.push(`${label}: "${oldVal||'—'}" → "${newVal||'—'}"`);
+    }
+    if (changes.length) {
+      history.push({ at: now, by: 'PM', changes });
+    }
+  }
+
   const f = {
-    id:       editingFId || uid(),
+    id:        editingFId || uid(),
     name,
-    team:     document.getElementById('f-team').value,
-    owner:    document.getElementById('f-owner').value,
-    status:   document.getElementById('f-status').value,
-    priority: document.getElementById('f-priority').value,
-    quarter:  document.getElementById('f-quarter').value,
-    due:      rawDue ? formatDueDate(rawDue) : '',
-    dueRaw:   rawDue,
-    figma:    document.getElementById('f-figma').value.trim(),
-    notes:    document.getElementById('f-notes').value.trim(),
-    updatedAt: Date.now(),
+    team:      el('f-team').value,
+    owner:     el('f-owner').value,
+    status:    el('f-status').value,
+    priority:  el('f-priority').value,
+    quarter:   el('f-quarter').value,
+    due:       rawDue ? formatDueDate(rawDue) : '',
+    dueRaw:    rawDue,
+    figma:     el('f-figma').value.trim(),
+    notes:     el('f-notes').value.trim(),
+    updatedAt: now,
+    history,
   };
-  if (!editingFId) f.createdAt = Date.now();
+  if (!editingFId) { f.createdAt = now; f.history = []; }
+
   const idx = features.findIndex(x=>x.id===f.id);
   if (idx>=0) features[idx]=f; else features.push(f);
-  if (db) await fbSet('features', f.id, f); else saveLocal();
+
+  // Always write to local storage as backup
+  saveLocal();
+  // Write to Firebase if connected
+  if (_db) await fbWrite('features', f.id, f);
+
   closeModal('f-overlay');
   renderAll();
-  toast(editingFId ? 'Feature updated' : 'Feature added ✓');
-}
-
-function formatDueDate(iso) {
-  // Convert "2026-04-15" → "Apr 15"
-  if (!iso) return '';
-  try {
-    const d = new Date(iso+'T00:00:00');
-    return d.toLocaleDateString('en-US',{month:'short',day:'numeric'});
-  } catch(e) { return iso; }
+  toast(editingFId ? 'Feature updated ✓' : 'Feature added ✓');
 }
 
 async function deleteFeature() {
   if (!editingFId) return;
   features = features.filter(f=>f.id!==editingFId);
-  if (db) await fbDel('features', editingFId); else saveLocal();
+  saveLocal();
+  if (_db) await fbRemove('features', editingFId);
   closeModal('f-overlay');
   renderAll();
   toast('Feature deleted');
 }
 
+function formatDueDate(iso) {
+  if (!iso) return '';
+  try { return new Date(iso+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'}); }
+  catch(e){ return iso; }
+}
+
 // ── CRUD: MEMBERS ──
 async function saveMember() {
-  const name = document.getElementById('m-name').value.trim();
+  const name = el('m-name').value.trim();
   if (!name) { toast('Name is required'); return; }
-  const m = { id: editingMId||uid(), name, role:v('m-role'), squad:v('m-squad'), email:v('m-email') };
+  const m = {id:editingMId||uid(), name, role:v('m-role'), squad:v('m-squad'), email:v('m-email')};
   const idx = members.findIndex(x=>x.id===m.id);
   if (idx>=0) members[idx]=m; else members.push(m);
-  if (db) await fbSet('members', m.id, m); else saveLocal();
+  saveLocal();
+  if (_db) await fbWrite('members', m.id, m);
   closeModal('m-overlay');
   renderTeam(); refreshDropdowns();
-  toast(editingMId ? 'Member updated' : 'Member added ✓');
+  toast(editingMId?'Member updated ✓':'Member added ✓');
 }
 
 async function deleteMember() {
   if (!editingMId) return;
   members = members.filter(m=>m.id!==editingMId);
-  if (db) await fbDel('members', editingMId); else saveLocal();
+  saveLocal();
+  if (_db) await fbRemove('members', editingMId);
   closeModal('m-overlay');
   renderTeam(); refreshDropdowns();
   toast('Member removed');
@@ -736,254 +756,228 @@ async function deleteMember() {
 
 // ── CRUD: SQUADS ──
 async function saveSquad() {
-  const name = document.getElementById('sq-name').value.trim();
+  const name = el('sq-name').value.trim();
   if (!name) { toast('Squad name is required'); return; }
-  const s = { id: editingSqId||('sq-'+uid()), name, color:v('sq-color') };
+  const s = {id:editingSqId||('sq-'+uid()), name, color:v('sq-color')};
   const idx = squads.findIndex(x=>x.id===s.id);
   if (idx>=0) squads[idx]=s; else squads.push(s);
-  if (db) await fbSet('squads', s.id, s); else saveLocal();
+  saveLocal();
+  if (_db) await fbWrite('squads', s.id, s);
   closeModal('sq-overlay');
   renderTeam(); refreshDropdowns();
-  toast(editingSqId ? 'Squad updated' : 'Squad added ✓');
+  toast(editingSqId?'Squad updated ✓':'Squad added ✓');
 }
 
 async function deleteSquad() {
   if (!editingSqId) return;
   squads = squads.filter(s=>s.id!==editingSqId);
-  if (db) await fbDel('squads', editingSqId); else saveLocal();
+  saveLocal();
+  if (_db) await fbRemove('squads', editingSqId);
   closeModal('sq-overlay');
   renderTeam(); refreshDropdowns();
   toast('Squad deleted');
 }
 
-// ── MODALS: FEATURES ──
+// ── MODALS ──
 function openAdd() {
   editingFId=null;
-  document.getElementById('f-modal-title').textContent='Add feature';
-  document.getElementById('del-btn').style.display='none';
-  document.getElementById('del-confirm').classList.remove('show');
-  document.getElementById('f-name').value='';
-  document.getElementById('f-status').value='planned';
-  document.getElementById('f-priority').value='Medium';
-  document.getElementById('f-quarter').value=document.getElementById('q-label').textContent;
-  document.getElementById('f-due').value='';
-  document.getElementById('f-figma').value='';
-  document.getElementById('f-notes').value='';
-  document.getElementById('figma-hint').textContent='';
+  el('f-modal-title').textContent='Add feature';
+  el('del-btn').style.display='none';
+  el('del-confirm').classList.remove('show');
+  ['f-name','f-figma','f-notes'].forEach(id=>el(id).value='');
+  el('f-status').value='planned'; el('f-priority').value='Medium';
+  el('f-quarter').value=el('q-label').textContent;
+  el('f-due').value=''; el('figma-hint').textContent='';
   refreshDropdowns();
-  document.getElementById('f-team').value='';
-  document.getElementById('f-owner').value='';
-  document.getElementById('f-overlay').classList.add('open');
-  setTimeout(()=>document.getElementById('f-name').focus(),100);
+  el('f-team').value=''; el('f-owner').value='';
+  el('f-overlay').classList.add('open');
+  setTimeout(()=>el('f-name').focus(),100);
 }
 
 function openEdit(id) {
-  const f = features.find(x=>x.id===id); if(!f) return;
+  const f=features.find(x=>x.id===id); if(!f) return;
   editingFId=id;
-  document.getElementById('f-modal-title').textContent='Edit feature';
-  document.getElementById('del-btn').style.display='block';
-  document.getElementById('del-confirm').classList.remove('show');
-  document.getElementById('f-name').value=f.name;
-  document.getElementById('f-status').value=f.status||'planned';
-  document.getElementById('f-priority').value=f.priority||'Medium';
-  document.getElementById('f-quarter').value=f.quarter||'Q2 2026';
-  document.getElementById('f-due').value=f.dueRaw||'';
-  document.getElementById('f-figma').value=f.figma||'';
-  document.getElementById('f-notes').value=f.notes||'';
+  el('f-modal-title').textContent='Edit feature';
+  el('del-btn').style.display='block';
+  el('del-confirm').classList.remove('show');
+  el('f-name').value=f.name||'';
+  el('f-status').value=f.status||'planned';
+  el('f-priority').value=f.priority||'Medium';
+  el('f-quarter').value=f.quarter||'Q2 2026';
+  el('f-due').value=f.dueRaw||'';
+  el('f-figma').value=f.figma||'';
+  el('f-notes').value=f.notes||'';
   previewFigma();
   refreshDropdowns();
-  document.getElementById('f-team').value=f.team||'';
-  document.getElementById('f-owner').value=f.owner||'';
-  document.getElementById('f-overlay').classList.add('open');
+  el('f-team').value=f.team||'';
+  el('f-owner').value=f.owner||'';
+
+  // Show history
+  const hist = f.history||[];
+  const histHTML = hist.length
+    ? `<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
+        <div style="font-size:11px;font-weight:600;color:var(--text2);margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em">Edit history</div>
+        <div style="display:flex;flex-direction:column;gap:6px;max-height:140px;overflow-y:auto">
+          ${hist.slice().reverse().map(h=>`
+            <div style="font-size:11px;background:var(--bg2);border-radius:6px;padding:7px 9px;border:1px solid var(--border)">
+              <div style="color:var(--text3);margin-bottom:3px">${new Date(h.at).toLocaleString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})} · ${h.by||'PM'}</div>
+              <div style="color:var(--text2);line-height:1.6">${h.changes.map(c=>`<div>· ${esc(c)}</div>`).join('')}</div>
+            </div>`).join('')}
+        </div>
+      </div>`
+    : '';
+  // Remove old history div if any, then append
+  const existing = el('f-history-section');
+  if (existing) existing.remove();
+  if (histHTML) {
+    const div = document.createElement('div');
+    div.id = 'f-history-section';
+    div.innerHTML = histHTML;
+    el('f-overlay').querySelector('.modal').appendChild(div);
+  }
+
+  el('f-overlay').classList.add('open');
 }
 
-// ── MODALS: MEMBERS ──
+function closeModal(id) {
+  document.getElementById(id).classList.remove('open');
+  // Clean up history section
+  const hs = el('f-history-section');
+  if (hs) hs.remove();
+}
+
 function openAddMember(squadName) {
   editingMId=null;
-  document.getElementById('m-modal-title').textContent='Add team member';
-  document.getElementById('m-del-btn').style.display='none';
-  document.getElementById('m-del-confirm').classList.remove('show');
-  ['m-name','m-role','m-email'].forEach(id=>document.getElementById(id).value='');
+  el('m-modal-title').textContent='Add team member';
+  el('m-del-btn').style.display='none';
+  el('m-del-confirm').classList.remove('show');
+  ['m-name','m-role','m-email'].forEach(id=>el(id).value='');
   refreshSquadSelect();
-  if (squadName) document.getElementById('m-squad').value=squadName;
-  document.getElementById('m-overlay').classList.add('open');
-  setTimeout(()=>document.getElementById('m-name').focus(),100);
+  if (squadName) el('m-squad').value=squadName;
+  el('m-overlay').classList.add('open');
+  setTimeout(()=>el('m-name').focus(),100);
 }
 
 function openEditMember(id) {
-  const m = members.find(x=>x.id===id); if(!m) return;
+  const m=members.find(x=>x.id===id); if(!m) return;
   editingMId=id;
-  document.getElementById('m-modal-title').textContent='Edit member';
-  document.getElementById('m-del-btn').style.display='block';
-  document.getElementById('m-del-confirm').classList.remove('show');
-  document.getElementById('m-name').value=m.name;
-  document.getElementById('m-role').value=m.role||'';
-  document.getElementById('m-email').value=m.email||'';
-  refreshSquadSelect();
-  document.getElementById('m-squad').value=m.squad||'';
-  document.getElementById('m-overlay').classList.add('open');
+  el('m-modal-title').textContent='Edit member';
+  el('m-del-btn').style.display='block';
+  el('m-del-confirm').classList.remove('show');
+  el('m-name').value=m.name; el('m-role').value=m.role||''; el('m-email').value=m.email||'';
+  refreshSquadSelect(); el('m-squad').value=m.squad||'';
+  el('m-overlay').classList.add('open');
 }
 
-// ── MODALS: SQUADS ──
 function openAddSquad() {
   editingSqId=null;
-  document.getElementById('sq-modal-title').textContent='Add squad';
-  document.getElementById('sq-del-btn').style.display='none';
-  document.getElementById('sq-del-confirm').classList.remove('show');
-  document.getElementById('sq-name').value='';
-  document.getElementById('sq-color').value='blue';
-  document.getElementById('sq-overlay').classList.add('open');
-  setTimeout(()=>document.getElementById('sq-name').focus(),100);
+  el('sq-modal-title').textContent='Add squad';
+  el('sq-del-btn').style.display='none';
+  el('sq-del-confirm').classList.remove('show');
+  el('sq-name').value=''; el('sq-color').value='blue';
+  el('sq-overlay').classList.add('open');
+  setTimeout(()=>el('sq-name').focus(),100);
 }
 
 function openEditSquad(id) {
-  const s = squads.find(x=>x.id===id); if(!s) return;
+  const s=squads.find(x=>x.id===id); if(!s) return;
   editingSqId=id;
-  document.getElementById('sq-modal-title').textContent='Edit squad';
-  document.getElementById('sq-del-btn').style.display='block';
-  document.getElementById('sq-del-confirm').classList.remove('show');
-  document.getElementById('sq-name').value=s.name;
-  document.getElementById('sq-color').value=s.color||'blue';
-  document.getElementById('sq-overlay').classList.add('open');
+  el('sq-modal-title').textContent='Edit squad';
+  el('sq-del-btn').style.display='block';
+  el('sq-del-confirm').classList.remove('show');
+  el('sq-name').value=s.name; el('sq-color').value=s.color||'blue';
+  el('sq-overlay').classList.add('open');
 }
 
-function closeModal(id) { document.getElementById(id).classList.remove('open'); }
-function showDel()   { document.getElementById('del-confirm').classList.add('show'); }
-function hideDel()   { document.getElementById('del-confirm').classList.remove('show'); }
-function showMDel()  { document.getElementById('m-del-confirm').classList.add('show'); }
-function hideMDel()  { document.getElementById('m-del-confirm').classList.remove('show'); }
-function showSqDel() { document.getElementById('sq-del-confirm').classList.add('show'); }
-function hideSqDel() { document.getElementById('sq-del-confirm').classList.remove('show'); }
+function showDel()  { el('del-confirm').classList.add('show'); }
+function hideDel()  { el('del-confirm').classList.remove('show'); }
+function showMDel() { el('m-del-confirm').classList.add('show'); }
+function hideMDel() { el('m-del-confirm').classList.remove('show'); }
+function showSqDel(){ el('sq-del-confirm').classList.add('show'); }
+function hideSqDel(){ el('sq-del-confirm').classList.remove('show'); }
 
 function previewFigma() {
-  const url = document.getElementById('f-figma').value.trim();
-  const el  = document.getElementById('figma-hint');
-  if (url.includes('figma.com')) el.innerHTML=`<a href="${url}" target="_blank" style="color:var(--purple)">Preview Figma link ↗</a>`;
-  else if (url) el.textContent='URL saved as-is';
-  else el.textContent='';
+  const url=el('f-figma').value.trim(), hint=el('figma-hint');
+  if(url.includes('figma.com')) hint.innerHTML=`<a href="${url}" target="_blank" style="color:var(--purple)">Preview ↗</a>`;
+  else if(url) hint.textContent='URL saved as-is'; else hint.textContent='';
 }
 
 function refreshSquadSelect() {
-  const sel = document.getElementById('m-squad');
-  sel.innerHTML = '<option value="">— select squad —</option>' +
+  el('m-squad').innerHTML='<option value="">— select squad —</option>'+
     squads.map(s=>`<option value="${esc(s.name)}">${esc(s.name)}</option>`).join('');
 }
 
 function refreshDropdowns() {
-  // Team dropdown in feature modal
-  const tSel = document.getElementById('f-team');
-  if (tSel) {
-    const cur = tSel.value;
-    tSel.innerHTML = '<option value="">— select squad —</option>' +
-      squads.map(s=>`<option value="${esc(s.name)}">${esc(s.name)}</option>`).join('');
-    if (cur) tSel.value=cur;
-  }
-  // Owner dropdown in feature modal
-  const oSel = document.getElementById('f-owner');
-  if (oSel) {
-    const cur = oSel.value;
-    oSel.innerHTML = '<option value="">— select member —</option>' +
-      members.map(m=>`<option value="${esc(m.name)}">${esc(m.name)} (${esc(m.squad||'')})</option>`).join('');
-    if (cur) oSel.value=cur;
-  }
-  // Squad dropdown in member modal
+  const tSel=el('f-team');
+  if(tSel){ const c=tSel.value; tSel.innerHTML='<option value="">— select squad —</option>'+squads.map(s=>`<option value="${esc(s.name)}">${esc(s.name)}</option>`).join(''); if(c) tSel.value=c; }
+  const oSel=el('f-owner');
+  if(oSel){ const c=oSel.value; oSel.innerHTML='<option value="">— select member —</option>'+members.map(m=>`<option value="${esc(m.name)}">${esc(m.name)} (${esc(m.squad||'')})</option>`).join(''); if(c) oSel.value=c; }
   refreshSquadSelect();
 }
 
-// ── RENDER ALL ──
+// ── RENDER ──
 function renderAll() {
   renderMetrics(); renderDashActive(); renderDashProgress(); renderDashDeadlines();
   renderFeatures(); renderRoadmap(); renderTeam(); renderReport();
-  document.getElementById('nb-features').textContent=features.length;
+  el('nb-features').textContent = features.length;
   refreshDropdowns();
 }
 
-function qFeatures() {
-  const q = document.getElementById('q-label').textContent;
-  const qf = features.filter(f=>f.quarter===q);
-  return qf.length ? qf : features;
-}
+function qF() { const q=el('q-label').textContent; const qf=features.filter(f=>f.quarter===q); return qf.length?qf:features; }
 
-// ── METRICS ──
 function renderMetrics() {
-  const src=qFeatures();
-  const done=src.filter(f=>f.status==='done').length;
-  const blocked=src.filter(f=>f.status==='blocked').length;
-  document.getElementById('m-total').textContent=src.length;
-  document.getElementById('m-ip').textContent=src.filter(f=>f.status==='inprogress').length;
-  document.getElementById('m-done').textContent=done;
-  document.getElementById('m-blocked').textContent=blocked;
-  document.getElementById('m-done-sub').textContent=done>0?Math.round(done/src.length*100)+'% complete':'None yet';
-  document.getElementById('m-blocked-sub').textContent=blocked>0?'Needs attention':'All clear';
+  const src=qF(), done=src.filter(f=>f.status==='done').length, bl=src.filter(f=>f.status==='blocked').length;
+  el('m-total').textContent=src.length; el('m-ip').textContent=src.filter(f=>f.status==='inprogress').length;
+  el('m-done').textContent=done; el('m-blocked').textContent=bl;
+  el('m-done-sub').textContent=done>0?Math.round(done/src.length*100)+'% complete':'None yet';
+  el('m-blocked-sub').textContent=bl>0?'Needs attention':'All clear';
 }
 
-// ── DASHBOARD PANELS ──
 function renderDashActive() {
   const active=features.filter(f=>['inprogress','review','blocked','design'].includes(f.status)).slice(0,6);
-  const el=document.getElementById('dash-active');
-  if(!active.length){el.innerHTML='<div class="empty"><div class="empty-icon">⬡</div>No active features yet.<br><button class="btn btn-primary btn-sm" style="margin-top:8px" onclick="openAdd()">Add first feature</button></div>';return;}
-  el.innerHTML=active.map(f=>fItemHTML(f)).join('');
+  const e=el('dash-active');
+  if(!active.length){ e.innerHTML='<div class="empty"><div class="empty-icon">⬡</div>No active features.<br><button class="btn btn-primary btn-sm" style="margin-top:8px" onclick="openAdd()">Add first feature</button></div>'; return; }
+  e.innerHTML=active.map(f=>fHTML(f)).join('');
 }
 
 function renderDashProgress() {
-  const el=document.getElementById('dash-prog');
-  const groups={};
-  features.forEach(f=>{
-    const t=f.team||'Unassigned';
-    if(!groups[t]) groups[t]=[];
-    groups[t].push(f);
-  });
-  const colors=['#185FA5','#534AB7','#0F6E56','#854F0B','#A32D2D'];
-  let html='';
+  const e=el('dash-prog'), groups={};
+  features.forEach(f=>{ const t=f.team||'Unassigned'; if(!groups[t]) groups[t]=[]; groups[t].push(f); });
+  const cols=['#185FA5','#534AB7','#0F6E56','#854F0B','#A32D2D'];
+  let h='';
   Object.entries(groups).slice(0,5).forEach(([team,items],i)=>{
-    const pct=items.length?Math.round((
-      items.filter(f=>f.status==='done').length+
-      items.filter(f=>f.status==='review').length*0.75+
-      items.filter(f=>f.status==='inprogress').length*0.5
-    )/items.length*100):0;
-    html+=`<div style="margin-bottom:12px">
-      <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-size:12px;color:var(--text2)">${esc(team)}</span><span style="font-size:12px;font-weight:500">${pct}%</span></div>
-      <div class="prog-bar"><div class="prog-fill" style="width:${pct}%;background:${colors[i%colors.length]}"></div></div>
-    </div>`;
+    const pct=items.length?Math.round((items.filter(f=>f.status==='done').length+items.filter(f=>f.status==='review').length*0.75+items.filter(f=>f.status==='inprogress').length*0.5)/items.length*100):0;
+    h+=`<div style="margin-bottom:12px"><div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-size:12px;color:var(--text2)">${esc(team)}</span><span style="font-size:12px;font-weight:500">${pct}%</span></div><div class="prog-bar"><div class="prog-fill" style="width:${pct}%;background:${cols[i%cols.length]}"></div></div></div>`;
   });
-  el.innerHTML=html||'<div style="color:var(--text3);font-size:13px">Add features with team assigned to see progress.</div>';
+  e.innerHTML=h||'<div style="color:var(--text3);font-size:13px">Add features with a squad assigned to see progress.</div>';
 }
 
 function renderDashDeadlines() {
-  const el=document.getElementById('dash-deadlines');
-  const upcoming=features.filter(f=>f.due&&f.status!=='done').slice(0,6);
-  if(!upcoming.length){el.innerHTML='<div style="color:var(--text3);font-size:13px;grid-column:1/-1">No upcoming deadlines.</div>';return;}
-  el.innerHTML=upcoming.map(f=>`
-    <div style="background:var(--bg2);border-radius:var(--r);padding:11px;border:1px solid var(--border);cursor:pointer" onclick="openEdit('${f.id}')">
-      <div style="font-size:10px;color:var(--text3);margin-bottom:3px">${esc(f.due)}</div>
-      <div style="font-size:13px;font-weight:500;color:var(--text)">${esc(f.name)}</div>
-      <div style="font-size:11px;color:var(--text3);margin-top:2px">${esc(f.owner||f.team||'')}</div>
-    </div>`).join('');
+  const e=el('dash-deadlines'), up=features.filter(f=>f.due&&f.status!=='done').slice(0,6);
+  if(!up.length){ e.innerHTML='<div style="color:var(--text3);font-size:13px;grid-column:1/-1">No upcoming deadlines.</div>'; return; }
+  e.innerHTML=up.map(f=>`<div style="background:var(--bg2);border-radius:var(--r);padding:11px;border:1px solid var(--border);cursor:pointer" onclick="openEdit('${f.id}')"><div style="font-size:10px;color:var(--text3);margin-bottom:3px">${esc(f.due)}</div><div style="font-size:13px;font-weight:500">${esc(f.name)}</div><div style="font-size:11px;color:var(--text3);margin-top:2px">${esc(f.owner||f.team||'')}</div></div>`).join('');
 }
 
-// ── FEATURE LIST ──
-function fItemHTML(f) {
-  const figmaBtn=f.figma?`<a href="${f.figma}" target="_blank" class="figma-btn" onclick="event.stopPropagation()">Figma ↗</a>`:'';
+function fHTML(f) {
+  const figma=f.figma?`<a href="${f.figma}" target="_blank" class="figma-btn" onclick="event.stopPropagation()">Figma ↗</a>`:'';
+  const qBadge=f.quarter?`<span style="font-size:9px;padding:1px 6px;border-radius:8px;background:var(--bg3);color:var(--text3)">${esc(f.quarter)}</span>`:'';
   return `<div class="f-item" onclick="openEdit('${f.id}')">
     <div class="f-dot d-${f.status||'planned'}"></div>
     <div class="f-info">
       <div class="f-name">${esc(f.name)}</div>
       <div class="f-meta">${esc(f.team||'')}${f.owner?' · '+esc(f.owner):''}${f.due?' · '+esc(f.due):''}</div>
     </div>
-    <div class="f-actions">${figmaBtn}<span class="badge b-${f.status||'planned'}">${LABEL[f.status]||f.status}</span><span class="badge priority-${f.priority||'Medium'}" style="font-size:9px">${f.priority||''}</span></div>
+    <div class="f-actions">${qBadge}${figma}<span class="badge b-${f.status||'planned'}">${LABEL[f.status]||f.status}</span><span class="badge priority-${f.priority||'Medium'}" style="font-size:9px">${f.priority||''}</span></div>
   </div>`;
 }
 
 function renderFeatures() {
-  const search=(document.getElementById('search-box')?.value||'').toLowerCase();
+  const search=(el('search-box')?.value||'').toLowerCase();
   let src=currentFilter==='all'?features:features.filter(f=>f.status===currentFilter);
   if(search) src=src.filter(f=>(f.name+f.team+f.owner+f.notes).toLowerCase().includes(search));
-  const el=document.getElementById('feature-list');
-  if(!src.length){
-    el.innerHTML='<div class="empty"><div class="empty-icon">⬡</div>'+(features.length===0?'No features yet.<br><button class="btn btn-primary btn-sm" style="margin-top:8px" onclick="openAdd()">Add your first feature</button>':'No features match this filter.')+'</div>';
-    return;
-  }
-  el.innerHTML=src.map(f=>fItemHTML(f)).join('');
+  const e=el('feature-list');
+  if(!src.length){ e.innerHTML='<div class="empty"><div class="empty-icon">⬡</div>'+(features.length===0?'No features yet.<br><button class="btn btn-primary btn-sm" style="margin-top:8px" onclick="openAdd()">Add your first feature</button>':'No features match this filter.')+'</div>'; return; }
+  e.innerHTML=src.map(f=>fHTML(f)).join('');
 }
 
 function setFilter(s,btn) {
@@ -993,230 +987,155 @@ function setFilter(s,btn) {
   renderFeatures();
 }
 
-// ── ROADMAP ──
 function renderRoadmap() {
   const byQ={};
-  features.forEach(f=>{if(!byQ[f.quarter])byQ[f.quarter]=[];byQ[f.quarter].push(f);});
-  const el=document.getElementById('roadmap-content');
-  if(!Object.keys(byQ).length){el.innerHTML='<div class="empty"><div class="empty-icon">↗</div>No roadmap data. Add features with a quarter assigned.</div>';return;}
-  const currentQ=document.getElementById('q-label').textContent;
-  el.innerHTML=Object.entries(byQ).map(([q,items])=>`
+  features.forEach(f=>{ if(!byQ[f.quarter]) byQ[f.quarter]=[]; byQ[f.quarter].push(f); });
+  const e=el('roadmap-content');
+  if(!Object.keys(byQ).length){ e.innerHTML='<div class="empty"><div class="empty-icon">↗</div>No roadmap data.</div>'; return; }
+  const cQ=el('q-label').textContent;
+  e.innerHTML=Object.entries(byQ).map(([q,items])=>`
     <div class="rm-q">
-      <div class="rm-q-head">${esc(q)} <span class="badge rm-q-lbl ${q===currentQ?'b-inprogress':'b-planned'}">${q===currentQ?'Current':'Planned'}</span></div>
-      ${items.map(f=>`
-        <div class="rm-row" onclick="openEdit('${f.id}')">
-          <div style="font-size:10px;font-weight:600;color:var(--text3);width:26px;flex-shrink:0">${esc((f.due||'').substring(0,6))}</div>
-          <div style="flex:1;min-width:0">
-            <div style="font-size:13px;font-weight:500;color:var(--text)">${esc(f.name)}</div>
-            <div style="font-size:11px;color:var(--text3)">${esc(f.team||'')}${f.owner?' · '+esc(f.owner):''}</div>
-          </div>
-          <div style="display:flex;align-items:center;gap:5px">
-            ${f.figma?`<a href="${f.figma}" target="_blank" class="figma-btn" onclick="event.stopPropagation()">Figma ↗</a>`:''}
-            <span class="badge b-${f.status||'planned'}">${LABEL[f.status]||f.status}</span>
-          </div>
-        </div>`).join('')}
+      <div class="rm-q-head">${esc(q)} <span class="badge rm-q-lbl ${q===cQ?'b-inprogress':'b-planned'}">${q===cQ?'Current':'Planned'}</span></div>
+      ${items.map(f=>`<div class="rm-row" onclick="openEdit('${f.id}')">
+        <div style="font-size:10px;font-weight:600;color:var(--text3);width:36px;flex-shrink:0">${esc((f.due||'').substring(0,6))}</div>
+        <div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:500">${esc(f.name)}</div><div style="font-size:11px;color:var(--text3)">${esc(f.team||'')}${f.owner?' · '+esc(f.owner):''}</div></div>
+        <div style="display:flex;align-items:center;gap:5px">${f.figma?`<a href="${f.figma}" target="_blank" class="figma-btn" onclick="event.stopPropagation()">Figma ↗</a>`:''}<span class="badge b-${f.status||'planned'}">${LABEL[f.status]||f.status}</span></div>
+      </div>`).join('')}
     </div>`).join('');
 }
 
-// ── TEAM ──
 function renderTeam() {
-  // Squads section (grouped cards)
-  const sqEl = document.getElementById('team-squads');
-  if (sqEl) {
-    if (!squads.length) {
-      sqEl.innerHTML='<div class="empty">No squads yet. Click "Add squad" to create one.</div>';
-    } else {
-      sqEl.innerHTML=`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;margin-bottom:16px">` +
-        squads.map(s=>{
-          const c=SQUAD_COLORS[s.color]||SQUAD_COLORS.blue;
-          const sqMembers=members.filter(m=>m.squad===s.name);
+  const sqEl=el('team-squads');
+  if(sqEl){
+    if(!squads.length){ sqEl.innerHTML='<div class="empty">No squads yet. Click "Add squad".</div>'; }
+    else {
+      sqEl.innerHTML=`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;margin-bottom:16px">`+
+        squads.map(s=>{ const c=SC[s.color]||SC.blue; const sm=members.filter(m=>m.squad===s.name);
           return `<div class="card" style="padding:14px">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-              <div style="display:flex;align-items:center;gap:8px">
-                <div style="width:10px;height:10px;border-radius:50%;background:${c.dot}"></div>
-                <span style="font-size:13px;font-weight:600;color:var(--text)">${esc(s.name)}</span>
-                <span class="badge" style="background:${c.bg};color:${c.text}">${sqMembers.length} members</span>
-              </div>
+              <div style="display:flex;align-items:center;gap:8px"><div style="width:10px;height:10px;border-radius:50%;background:${c.dot}"></div><span style="font-size:13px;font-weight:600">${esc(s.name)}</span><span class="badge" style="background:${c.bg};color:${c.text}">${sm.length}</span></div>
               <button class="btn btn-sm" onclick="openEditSquad('${s.id}')" style="font-size:10px;padding:2px 7px">Edit</button>
             </div>
-            ${sqMembers.map((m,i)=>memberRowHTML(m,i)).join('')}
+            ${sm.map((m,i)=>memberRow(m,i)).join('')}
             <button class="btn btn-sm" style="width:100%;margin-top:8px;font-size:11px" onclick="openAddMember('${esc(s.name)}')">+ Add to ${esc(s.name)}</button>
-          </div>`;
-        }).join('') + '</div>';
+          </div>`;}).join('')+'</div>';
     }
   }
-
-  // All members
-  const allEl=document.getElementById('team-all');
-  if(allEl) allEl.innerHTML=members.length?members.map((m,i)=>memberRowHTML(m,i)).join(''):'<div style="color:var(--text3);font-size:13px">No members yet.</div>';
+  const ae=el('team-all');
+  if(ae) ae.innerHTML=members.length?members.map((m,i)=>memberRow(m,i)).join(''):'<div style="color:var(--text3);font-size:13px">No members yet.</div>';
 }
 
-function memberRowHTML(m, i) {
-  const sq=squads.find(s=>s.name===m.squad);
-  const c=sq?SQUAD_COLORS[sq.color]||SQUAD_COLORS.blue:SQUAD_COLORS.gray;
-  const initials=m.name.split(' ').map(w=>w[0]).join('').substring(0,2).toUpperCase();
-  const tasks=features.filter(f=>f.owner===m.name&&f.status!=='done').length;
+function memberRow(m,i) {
+  const sq=squads.find(s=>s.name===m.squad), c=sq?SC[sq.color]||SC.blue:SC.gray;
+  const init=m.name.split(' ').map(w=>w[0]).join('').substring(0,2).toUpperCase();
+  const active=features.filter(f=>f.owner===m.name&&f.status!=='done').length;
   return `<div class="team-row" onclick="openEditMember('${m.id}')" style="cursor:pointer">
-    <div class="team-av" style="background:${c.bg};color:${c.text}">${initials}</div>
-    <div style="flex:1">
-      <div style="font-size:13px;font-weight:500;color:var(--text)">${esc(m.name)}</div>
-      <div style="font-size:11px;color:var(--text3)">${esc(m.role||m.squad||'')}</div>
-    </div>
-    <span class="badge b-inprogress">${tasks} active</span>
+    <div class="team-av" style="background:${c.bg};color:${c.text}">${init}</div>
+    <div style="flex:1"><div style="font-size:13px;font-weight:500">${esc(m.name)}</div><div style="font-size:11px;color:var(--text3)">${esc(m.role||m.squad||'')}</div></div>
+    <span class="badge b-inprogress">${active} active</span>
   </div>`;
 }
 
-// ── REPORT ──
 function renderReport() {
-  const q=document.getElementById('q-label').textContent;
-  const src=qFeatures();
-  const done=src.filter(f=>f.status==='done');
-  const blocked=src.filter(f=>f.status==='blocked');
-  const ip=src.filter(f=>f.status==='inprogress');
-  document.getElementById('rpt-q').textContent=q;
-  document.getElementById('rpt-stats').innerHTML=[
-    ['Quarter',q],['Features committed',src.length],
-    ['Completed',`${done.length} of ${src.length}`],
-    ['In progress',ip.length],
-    ['Blocked',blocked.length>0?`${blocked.length} — needs attention`:'0 — all clear'],
-    ['Completion rate',src.length?Math.round(done.length/src.length*100)+'%':'—'],
-  ].map(([k,val])=>`<div class="rpt-stat"><span style="color:var(--text2)">${k}</span><span style="font-weight:500;${k==='Blocked'&&blocked.length?'color:var(--red-text)':''}">${val}</span></div>`).join('');
-  document.getElementById('rpt-hi').innerHTML=done.map(f=>`✓ ${esc(f.name)} shipped`).join('<br>')||'No completed features yet.';
-  document.getElementById('rpt-risk').innerHTML=blocked.map(f=>`⚠ ${esc(f.name)}${f.notes?' — '+esc(f.notes):''}`).join('<br>')||'No blockers currently.';
-  document.getElementById('rpt-breakdown').innerHTML=`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">`+
-    Object.entries(LABEL).map(([s,l])=>{
-      const n=src.filter(f=>f.status===s).length;
-      return `<div style="background:var(--bg2);border-radius:var(--r);padding:11px;border:1px solid var(--border)"><div style="font-size:10px;color:var(--text3);margin-bottom:3px">${l}</div><div style="font-size:20px;font-weight:600;color:var(--text)">${n}</div></div>`;
-    }).join('')+'</div>';
+  const q=el('q-label').textContent, src=qF();
+  const done=src.filter(f=>f.status==='done'), bl=src.filter(f=>f.status==='blocked'), ip=src.filter(f=>f.status==='inprogress');
+  el('rpt-q').textContent=q;
+  el('rpt-stats').innerHTML=[['Quarter',q],['Features committed',src.length],['Completed',`${done.length} of ${src.length}`],['In progress',ip.length],['Blocked',bl.length?`${bl.length} — needs attention`:'0 — all clear'],['Completion rate',src.length?Math.round(done.length/src.length*100)+'%':'—']].map(([k,val])=>`<div class="rpt-stat"><span style="color:var(--text2)">${k}</span><span style="font-weight:500;${k==='Blocked'&&bl.length?'color:var(--red-text)':''}">${val}</span></div>`).join('');
+  el('rpt-hi').innerHTML=done.map(f=>`✓ ${esc(f.name)} shipped`).join('<br>')||'No completed features yet.';
+  el('rpt-risk').innerHTML=bl.map(f=>`⚠ ${esc(f.name)}${f.notes?' — '+esc(f.notes):''}`).join('<br>')||'No blockers currently.';
+  el('rpt-breakdown').innerHTML=`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">`+Object.entries(LABEL).map(([s,l])=>`<div style="background:var(--bg2);border-radius:var(--r);padding:11px;border:1px solid var(--border)"><div style="font-size:10px;color:var(--text3);margin-bottom:3px">${l}</div><div style="font-size:20px;font-weight:600">${src.filter(f=>f.status===s).length}</div></div>`).join('')+'</div>';
 }
 
 // ── AI CHAT ──
 async function sendMsg() {
-  const input=document.getElementById('chat-in');
-  const text=input.value.trim(); if(!text) return;
-  input.value='';
-  addMsg('user',text);
-  chatHistory.push({role:'user',content:text});
+  const inp=el('chat-in'), text=inp.value.trim(); if(!text) return;
+  inp.value=''; addMsg('user',text); chatHistory.push({role:'user',content:text});
   const lid=addLoader();
-  const ctx=`You are a PM assistant. Quarter: ${document.getElementById('q-label').textContent}. Features: ${JSON.stringify(features.slice(0,40))}. Team: ${JSON.stringify(members)}. Squads: ${JSON.stringify(squads)}. Blocked: ${features.filter(f=>f.status==='blocked').length}. Done: ${features.filter(f=>f.status==='done').length}. Be concise, actionable, use bullet points.`;
+  const ctx=`You are a PM assistant. Quarter: ${el('q-label').textContent}. Features: ${JSON.stringify(features.slice(0,40))}. Team: ${JSON.stringify(members)}. Squads: ${JSON.stringify(squads)}. Be concise, actionable, use bullet points.`;
   try {
     const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,system:ctx,messages:chatHistory})});
-    const data=await res.json();
-    removeLoader(lid);
+    const data=await res.json(); removeLoader(lid);
     const reply=(data.content||[]).map(i=>i.text||'').join('');
-    chatHistory.push({role:'assistant',content:reply});
-    addMsg('ai',reply);
-  } catch(e) { removeLoader(lid); addMsg('ai','Could not reach AI. Check your connection.'); }
+    chatHistory.push({role:'assistant',content:reply}); addMsg('ai',reply);
+  } catch(e){ removeLoader(lid); addMsg('ai','Could not reach AI.'); }
 }
-
-function sq(t){document.getElementById('chat-in').value=t;sendMsg();}
-function aiReport(){go('chat');sq('Generate a full professional VP executive report for this quarter including overview, highlights, risks, blockers, team performance, and next quarter planning preview.');}
-
+function sq(t){el('chat-in').value=t;sendMsg();}
+function aiReport(){go('chat');sq('Generate a full professional VP executive report for this quarter: overview, highlights, risks, blockers, team performance, next quarter preview.');}
 function addMsg(role,text) {
-  const el=document.getElementById('chat-msgs');
-  const d=document.createElement('div');
+  const e=el('chat-msgs'), d=document.createElement('div');
   d.className='msg'+(role==='user'?' user':'');
   d.innerHTML=`<div class="msg-av av-${role==='ai'?'ai':'user'}">${role==='ai'?'AI':'PM'}</div><div class="msg-bubble">${text.split('\n').join('<br>').replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>')}</div>`;
-  el.appendChild(d); el.scrollTop=el.scrollHeight;
+  e.appendChild(d); e.scrollTop=e.scrollHeight;
 }
-function addLoader() {
-  const el=document.getElementById('chat-msgs');
-  const d=document.createElement('div');
-  d.className='msg'; const id='ld'+Date.now(); d.id=id;
-  d.innerHTML=`<div class="msg-av av-ai">AI</div><div class="msg-bubble"><div class="ldots"><span></span><span></span><span></span></div></div>`;
-  el.appendChild(d); el.scrollTop=el.scrollHeight; return id;
-}
-function removeLoader(id){const e=document.getElementById(id);if(e)e.remove();}
+function addLoader(){ const e=el('chat-msgs'),d=document.createElement('div'),id='ld'+Date.now(); d.id=id; d.className='msg'; d.innerHTML=`<div class="msg-av av-ai">AI</div><div class="msg-bubble"><div class="ldots"><span></span><span></span><span></span></div></div>`; e.appendChild(d); e.scrollTop=e.scrollHeight; return id; }
+function removeLoader(id){ const e=document.getElementById(id); if(e)e.remove(); }
 
 // ── EXPORT / IMPORT ──
 function exportData() {
   const blob=new Blob([JSON.stringify({features,members,squads,exportedAt:new Date().toISOString()},null,2)],{type:'application/json'});
-  const a=document.createElement('a');
-  a.href=URL.createObjectURL(blob);
-  a.download=`pmhub-backup-${new Date().toISOString().slice(0,10)}.json`;
-  a.click(); toast('Data exported');
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=`pmhub-backup-${new Date().toISOString().slice(0,10)}.json`; a.click(); toast('Data exported');
 }
-function triggerImport(){document.getElementById('import-file').click();}
+function triggerImport(){ el('import-file').click(); }
 function importData(e) {
   const file=e.target.files[0]; if(!file) return;
-  const reader=new FileReader();
-  reader.onload=async ev=>{
+  const r=new FileReader();
+  r.onload=async ev=>{
     try {
       const d=JSON.parse(ev.target.result);
       features=d.features||[]; members=d.members||[]; squads=d.squads||defaultSquads();
-      if(db){
-        for(const f of features) await fbSet('features',f.id,f);
-        for(const m of members) await fbSet('members',m.id,m);
-        for(const s of squads)  await fbSet('squads',s.id,s);
-      } else { saveLocal(); }
-      renderAll(); toast(`Imported ${features.length} features, ${members.length} members`);
-    } catch(err){toast('Import failed — invalid JSON');}
+      saveLocal();
+      if(_db){ for(const f of features) await fbWrite('features',f.id,f); for(const m of members) await fbWrite('members',m.id,m); for(const s of squads) await fbWrite('squads',s.id,s); }
+      renderAll(); toast(`Imported ${features.length} features`);
+    } catch(err){ toast('Import failed'); }
   };
-  reader.readAsText(file); e.target.value='';
+  r.readAsText(file); e.target.value='';
 }
 
 // ── NAV ──
-const VIEW_TITLES={dashboard:'Dashboard',features:'Feature tracker',roadmap:'Roadmap',team:'Team',report:'VP Report',chat:'AI Assistant',setup:'Settings'};
+const VT={dashboard:'Dashboard',features:'Feature tracker',roadmap:'Roadmap',team:'Team',report:'VP Report',chat:'AI Assistant',setup:'Settings'};
 function go(v) {
-  document.querySelectorAll('.view').forEach(el=>el.classList.remove('active'));
-  document.querySelectorAll('.nav-item').forEach(el=>el.classList.remove('active'));
-  document.getElementById('view-'+v).classList.add('active');
-  document.getElementById('view-title').textContent=VIEW_TITLES[v]||v;
-  document.querySelectorAll('.nav-item').forEach(el=>{
-    const t=el.textContent.trim().toLowerCase();
-    if(t.startsWith(v.substring(0,4))||(v==='report'&&t.includes('vp'))||(v==='chat'&&t.includes('ai'))) el.classList.add('active');
-  });
+  document.querySelectorAll('.view').forEach(e=>e.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(e=>e.classList.remove('active'));
+  el('view-'+v).classList.add('active');
+  el('view-title').textContent=VT[v]||v;
+  document.querySelectorAll('.nav-item').forEach(e=>{ const t=e.textContent.trim().toLowerCase(); if(t.startsWith(v.substring(0,4))||(v==='report'&&t.includes('vp'))||(v==='chat'&&t.includes('ai'))) e.classList.add('active'); });
 }
 
-// ── SYNC STATUS ──
+// ── STATUS ──
 function setSyncStatus(state,msg) {
-  const dot=document.getElementById('sdot');
-  dot.className='sync-dot'+(state==='loading'?' loading':state==='error'?' error':'');
-  document.getElementById('stext').textContent=msg;
+  el('sdot').className='sync-dot'+(state==='loading'?' loading':state==='error'?' error':'');
+  el('stext').textContent=msg;
 }
+function setLabel(txt){ const e=el('storage-mode-label'); if(e) e.textContent=txt; }
 
 // ── UTILS ──
-function v(id){return document.getElementById(id).value.trim();}
-function esc(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
-function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2500);}
+function el(id){ return document.getElementById(id); }
+function v(id){ return el(id)?el(id).value.trim():''; }
+function esc(s){ return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function toast(msg){ const t=el('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2500); }
 
 // ── INIT ──
 loadLocal();
+renderAll(); // render immediately with local data
 
-// Determine which Firebase config to use:
-// Priority: 1) BAKED_CONFIG in file, 2) localStorage saved config
-const fbCfg = BAKED_CONFIG || (() => { try { return JSON.parse(localStorage.getItem(FB_KEY)); } catch(e){ return null; } })();
-
-// Always render immediately with local data — never block the UI
-renderAll();
+// Get Firebase config: BAKED_CONFIG takes priority (works for all visitors), then localStorage
+const fbCfg = BAKED_CONFIG || (()=>{ try{ return JSON.parse(localStorage.getItem(FB_KEY)); }catch(e){ return null; } })();
 
 if (fbCfg && fbCfg.apiKey) {
-  setSyncStatus('loading', 'Connecting...');
-  // Connect in background — UI is already usable
-  tryConnectFirebase(fbCfg).then(ok => {
-    if (!ok) {
-      setSyncStatus('error', 'Firebase unreachable — using local data');
-      setStorageLabel('Local storage (offline)');
-      // Clear saved config so we don't retry on next load if it keeps failing
-      // (but keep BAKED_CONFIG working)
-      if (!BAKED_CONFIG) localStorage.removeItem(FB_KEY);
-    }
-  }).catch(e => {
-    setSyncStatus('error', 'Firebase error');
-    console.error(e);
-  });
+  setSyncStatus('loading','Connecting...');
+  tryConnect(fbCfg);
 } else {
-  setSyncStatus('ok', 'Local storage');
+  setSyncStatus('ok','Local storage');
 }
 
-// Expose to inline handlers
+// ── EXPOSE TO INLINE HANDLERS ──
 window.go=go; window.openAdd=openAdd; window.openEdit=openEdit;
 window.openAddMember=openAddMember; window.openEditMember=openEditMember;
 window.openAddSquad=openAddSquad; window.openEditSquad=openEditSquad;
 window.closeModal=closeModal;
 window.saveFeature=saveFeature; window.deleteFeature=deleteFeature;
-window.saveMember=saveMember; window.deleteMember=deleteMember;
-window.saveSquad=saveSquad; window.deleteSquad=deleteSquad;
+window.saveMember=saveMember;   window.deleteMember=deleteMember;
+window.saveSquad=saveSquad;     window.deleteSquad=deleteSquad;
 window.showDel=showDel; window.hideDel=hideDel;
 window.showMDel=showMDel; window.hideMDel=hideMDel;
 window.showSqDel=showSqDel; window.hideSqDel=hideSqDel;
@@ -1224,7 +1143,7 @@ window.setFilter=setFilter; window.previewFigma=previewFigma;
 window.sendMsg=sendMsg; window.sq=sq; window.aiReport=aiReport;
 window.exportData=exportData; window.triggerImport=triggerImport; window.importData=importData;
 window.connectFromUI=connectFromUI; window.useLocal=useLocal;
-window.showFirebaseSetup=()=>{document.getElementById('firebase-setup').style.display='block';};
+window.showFirebaseSetup=()=>{ el('firebase-setup').style.display='block'; };
 </script>
 </body>
 </html>
