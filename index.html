@@ -292,14 +292,15 @@ code{background:var(--bg2);padding:1px 5px;border-radius:4px;font-size:11px;font
 
   <!-- TEAM -->
   <div class="view" id="view-team">
-    <div style="display:flex;justify-content:flex-end;margin-bottom:12px">
-      <button class="btn btn-primary btn-sm" onclick="openAddMember()">+ Add member</button>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <div style="font-size:12px;color:var(--text2)">Manage your squads and members</div>
+      <div style="display:flex;gap:7px">
+        <button class="btn btn-sm" onclick="openAddSquad()">+ Add squad</button>
+        <button class="btn btn-primary btn-sm" onclick="openAddMember()">+ Add member</button>
+      </div>
     </div>
-    <div class="two-col">
-      <div class="card"><div class="sec-title">UI/UX team</div><div id="team-uiux"></div></div>
-      <div class="card"><div class="sec-title">Development team</div><div id="team-dev"></div></div>
-    </div>
-    <div class="card"><div class="sec-title">All members</div><div id="team-all"></div></div>
+    <div id="team-squads"></div>
+    <div class="card" style="margin-top:4px"><div class="sec-title">All members</div><div id="team-all"></div></div>
   </div>
 
   <!-- VP REPORT -->
@@ -369,7 +370,7 @@ code{background:var(--bg2);padding:1px 5px;border-radius:4px;font-size:11px;font
             <div class="form-row"><div class="form-lbl">Auth Domain</div><input class="form-input" id="fb-authDomain" placeholder="my-pm-hub.firebaseapp.com"></div>
             <div class="form-row"><div class="form-lbl">App ID</div><input class="form-input" id="fb-appId" placeholder="1:123:web:abc..."></div>
           </div>
-          <button class="btn btn-primary" style="margin-top:8px" onclick="connectFirebase()">Connect & sync</button>
+          <button class="btn btn-primary" style="margin-top:8px" onclick="connectFromUI()">Connect & sync</button>
           <div id="fb-result" style="margin-top:8px;font-size:12px"></div>
         </div></div>
         <div class="setup-step"><div class="step-num">5</div><div class="step-body"><div class="step-title">Share your dashboard URL</div><div class="step-desc">Once connected, host this HTML file on Netlify or Vercel. Everyone who opens that URL will see live data — no login needed.</div></div></div>
@@ -406,14 +407,14 @@ code{background:var(--bg2);padding:1px 5px;border-radius:4px;font-size:11px;font
     <div class="form-row"><div class="form-lbl">Priority</div>
       <select class="form-select" id="f-priority"><option>High</option><option selected>Medium</option><option>Low</option></select>
     </div>
-    <div class="form-row"><div class="form-lbl">Team</div><input class="form-input" id="f-team" placeholder="e.g. Dev + UI/UX"></div>
-    <div class="form-row"><div class="form-lbl">Owner</div><input class="form-input" id="f-owner" placeholder="e.g. Budi K." list="owner-list"><datalist id="owner-list"></datalist></div>
+    <div class="form-row"><div class="form-lbl">Team / Squad</div><select class="form-select" id="f-team"><option value="">— select squad —</option></select></div>
+    <div class="form-row"><div class="form-lbl">Owner</div><select class="form-select" id="f-owner"><option value="">— select member —</option></select></div>
     <div class="form-row"><div class="form-lbl">Quarter</div>
       <select class="form-select" id="f-quarter">
         <option>Q1 2026</option><option selected>Q2 2026</option><option>Q3 2026</option><option>Q4 2026</option><option>Q1 2027</option>
       </select>
     </div>
-    <div class="form-row"><div class="form-lbl">Due date</div><input class="form-input" id="f-due" placeholder="e.g. Apr 30"></div>
+    <div class="form-row"><div class="form-lbl">Due date</div><input class="form-input" id="f-due" type="date" style="cursor:pointer"></div>
     <div class="form-row" style="grid-column:1/-1"><div class="form-lbl">Figma link</div><input class="form-input" id="f-figma" placeholder="https://www.figma.com/file/..." oninput="previewFigma()"><div class="form-hint" id="figma-hint"></div></div>
     <div class="form-row" style="grid-column:1/-1"><div class="form-lbl">Notes / blockers</div><textarea class="form-ta" id="f-notes" placeholder="Context, blockers, dependencies..."></textarea></div>
   </div>
@@ -436,7 +437,7 @@ code{background:var(--bg2);padding:1px 5px;border-radius:4px;font-size:11px;font
     <div class="form-row"><div class="form-lbl">Full name *</div><input class="form-input" id="m-name" placeholder="e.g. Budi K."></div>
     <div class="form-row"><div class="form-lbl">Role</div><input class="form-input" id="m-role" placeholder="e.g. Tech Lead"></div>
     <div class="form-row"><div class="form-lbl">Squad</div>
-      <select class="form-select" id="m-squad"><option>Dev</option><option>UI/UX</option><option>Product</option><option>QA</option><option>Design</option><option>All</option></select>
+      <select class="form-select" id="m-squad"><option value="">— select squad —</option></select>
     </div>
     <div class="form-row"><div class="form-lbl">Email / Slack</div><input class="form-input" id="m-email" placeholder="e.g. budi@company.com"></div>
   </div>
@@ -451,61 +452,94 @@ code{background:var(--bg2);padding:1px 5px;border-radius:4px;font-size:11px;font
 </div>
 </div>
 
+<!-- SQUAD MODAL -->
+<div class="overlay" id="sq-overlay" onclick="if(event.target===this)closeModal('sq-overlay')">
+<div class="modal" style="max-width:360px">
+  <div class="modal-title"><span id="sq-modal-title">Add squad</span><button class="modal-close" onclick="closeModal('sq-overlay')">×</button></div>
+  <div class="form-row"><div class="form-lbl">Squad name *</div><input class="form-input" id="sq-name" placeholder="e.g. Dev, UI/UX, QA"></div>
+  <div class="form-row"><div class="form-lbl">Color</div>
+    <select class="form-select" id="sq-color">
+      <option value="blue">Blue (Dev)</option>
+      <option value="purple">Purple (UI/UX)</option>
+      <option value="green">Green (QA)</option>
+      <option value="amber">Amber (Design)</option>
+      <option value="red">Red (Product)</option>
+      <option value="gray">Gray (Other)</option>
+    </select>
+  </div>
+  <div class="modal-foot">
+    <div><button class="btn btn-danger btn-sm" id="sq-del-btn" onclick="showSqDel()" style="display:none">Delete squad</button></div>
+    <div style="display:flex;gap:7px"><button class="btn btn-sm" onclick="closeModal('sq-overlay')">Cancel</button><button class="btn btn-primary btn-sm" onclick="saveSquad()">Save</button></div>
+  </div>
+  <div class="del-confirm" id="sq-del-confirm">
+    <div style="font-size:12px;color:var(--red-text);margin-bottom:8px">Delete this squad? Members will remain but lose their squad assignment.</div>
+    <div style="display:flex;gap:7px"><button class="btn btn-danger btn-sm" onclick="deleteSquad()">Yes, delete</button><button class="btn btn-sm" onclick="hideSqDel()">Cancel</button></div>
+  </div>
+</div>
+</div>
+
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
 
 <script type="module">
-// ── Firebase SDK (loaded only if configured) ──
-let db = null, fbUnsubscribe = null;
+// ═══════════════════════════════════════════════
+// PM HUB — all logic
+// ═══════════════════════════════════════════════
 
+// ── CONSTANTS ──
 const LABEL = {inprogress:'In progress',design:'Design',review:'Review',blocked:'Blocked',done:'Done',planned:'Planned'};
-const AV_COLORS = ['#E6F1FB:#0C447C','#EEEDFE:#3C3489','#E1F5EE:#085041','#FAEEDA:#633806','#FCEBEB:#791F1F','#F1EFE8:#444441'];
+const SQUAD_COLORS = {
+  blue:  {bg:'#E6F1FB', text:'#0C447C', dot:'#185FA5'},
+  purple:{bg:'#EEEDFE', text:'#3C3489', dot:'#534AB7'},
+  green: {bg:'#E1F5EE', text:'#085041', dot:'#0F6E56'},
+  amber: {bg:'#FAEEDA', text:'#633806', dot:'#854F0B'},
+  red:   {bg:'#FCEBEB', text:'#791F1F', dot:'#A32D2D'},
+  gray:  {bg:'#F1EFE8', text:'#444441', dot:'#6b6a65'},
+};
 
 // ── STATE ──
-let features = [], members = [], chatHistory = [], editingFId = null, editingMId = null, currentFilter = 'all';
+let features=[], members=[], squads=[], chatHistory=[];
+let editingFId=null, editingMId=null, editingSqId=null, currentFilter='all';
+let db=null, fbUnsubscribe=null;
 
-// ── STORAGE ──
-const STORAGE_KEY = 'pmhub_data';
-const FB_CONFIG_KEY = 'pmhub_fb_config';
+// ── STORAGE KEYS ──
+const SK = 'pmhub_data';
+const FB_KEY = 'pmhub_fb_config';
+// ⬇ HARDCODE your Firebase config here after connecting once.
+// This makes it work for ALL visitors (team members, VP) without setup.
+// After connecting via the Settings screen, copy the values shown in the
+// browser console (or from your Firebase project) and paste below:
+const BAKED_CONFIG = null;
+// Example (uncomment and fill in your values):
+// const BAKED_CONFIG = {
+//   apiKey: "AIzaSy...",
+//   projectId: "pm-dashboard-xxxx",
+//   authDomain: "pm-dashboard-xxxx.firebaseapp.com",
+//   appId: "1:123:web:abc..."
+// };
 
+// ── LOCAL STORAGE ──
 function saveLocal() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify({features, members}));
+  localStorage.setItem(SK, JSON.stringify({features, members, squads}));
 }
-
 function loadLocal() {
   try {
-    const d = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+    const d = JSON.parse(localStorage.getItem(SK) || '{}');
     features = d.features || [];
-    members = d.members || [];
-  } catch(e) { features = []; members = []; }
+    members  = d.members  || [];
+    squads   = d.squads   || defaultSquads();
+  } catch(e) { features=[]; members=[]; squads=defaultSquads(); }
+}
+function defaultSquads() {
+  return [
+    {id:'sq-dev',    name:'Dev',   color:'blue'},
+    {id:'sq-uiux',   name:'UI/UX', color:'purple'},
+    {id:'sq-product',name:'Product',color:'amber'},
+  ];
 }
 
 // ── FIREBASE ──
-async function connectFirebase() {
-  const cfg = {
-    apiKey: document.getElementById('fb-apiKey').value.trim(),
-    projectId: document.getElementById('fb-projectId').value.trim(),
-    authDomain: document.getElementById('fb-authDomain').value.trim(),
-    appId: document.getElementById('fb-appId').value.trim(),
-  };
-  if (!cfg.apiKey || !cfg.projectId) {
-    document.getElementById('fb-result').innerHTML = '<span style="color:var(--red-text)">API Key and Project ID are required.</span>';
-    return;
-  }
-  document.getElementById('fb-result').innerHTML = '<span style="color:var(--text2)">Connecting...</span>';
-  try {
-    await initFirebase(cfg);
-    localStorage.setItem(FB_CONFIG_KEY, JSON.stringify(cfg));
-    document.getElementById('fb-result').innerHTML = '<span style="color:var(--green-text)">Connected! Real-time sync is active.</span>';
-    document.getElementById('storage-mode-label').textContent = 'Firebase (real-time sync)';
-    setSyncStatus('ok', 'Firebase connected');
-    go('dashboard');
-  } catch(e) {
-    document.getElementById('fb-result').innerHTML = `<span style="color:var(--red-text)">Error: ${e.message}</span>`;
-  }
-}
-
-async function initFirebase(cfg) {
+async function connectFirebase(cfg) {
   const { initializeApp, getApps } = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js');
   const { getFirestore, collection, onSnapshot, doc, setDoc, deleteDoc, getDocs } =
     await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
@@ -513,254 +547,384 @@ async function initFirebase(cfg) {
   const app = getApps().length ? getApps()[0] : initializeApp(cfg);
   db = getFirestore(app);
 
-  // Push local data up if Firestore is empty
-  const snap = await getDocs(collection(db, 'features'));
-  if (snap.empty && features.length > 0) {
-    for (const f of features) await setDoc(doc(collection(db, 'features'), f.id), f);
-    const mSnap = await getDocs(collection(db, 'members'));
-    if (mSnap.empty) for (const m of members) await setDoc(doc(collection(db, 'members'), m.id), m);
-    toast('Local data uploaded to Firebase');
+  // Upload local data to Firebase if it's empty
+  const fSnap = await getDocs(collection(db, 'features'));
+  if (fSnap.empty && features.length > 0) {
+    for (const f of features) await setDoc(doc(collection(db,'features'), f.id), f);
+  }
+  const mSnap = await getDocs(collection(db, 'members'));
+  if (mSnap.empty && members.length > 0) {
+    for (const m of members) await setDoc(doc(collection(db,'members'), m.id), m);
+  }
+  const sSnap = await getDocs(collection(db, 'squads'));
+  if (sSnap.empty && squads.length > 0) {
+    for (const s of squads) await setDoc(doc(collection(db,'squads'), s.id), s);
   }
 
   // Real-time listeners
   if (fbUnsubscribe) fbUnsubscribe();
-  const unsub1 = onSnapshot(collection(db, 'features'), s => {
-    features = s.docs.map(d => d.data());
-    renderAll(); setSyncStatus('ok', 'Live · ' + new Date().toLocaleTimeString());
-  });
-  const unsub2 = onSnapshot(collection(db, 'members'), s => {
-    members = s.docs.map(d => d.data());
-    renderTeam();
-  });
-  fbUnsubscribe = () => { unsub1(); unsub2(); };
+  const u1 = onSnapshot(collection(db,'features'), s => { features=s.docs.map(d=>d.data()); renderAll(); setSyncStatus('ok','Live · '+new Date().toLocaleTimeString()); });
+  const u2 = onSnapshot(collection(db,'members'),  s => { members=s.docs.map(d=>d.data()); renderTeam(); refreshDropdowns(); });
+  const u3 = onSnapshot(collection(db,'squads'),   s => { squads=s.docs.map(d=>d.data()); renderTeam(); refreshDropdowns(); });
+  fbUnsubscribe = () => { u1(); u2(); u3(); };
 
-  window._fbFirestore = { getFirestore, collection, doc, setDoc, deleteDoc, db };
+  window._fb = { collection, doc, setDoc, deleteDoc, db };
 }
 
-async function fbSet(collName, id, data) {
-  if (!db) return;
-  const { collection, doc, setDoc } = window._fbFirestore;
-  await setDoc(doc(collection(db, collName), id), data);
+async function tryConnectFirebase(cfg) {
+  try {
+    await connectFirebase(cfg);
+    localStorage.setItem(FB_KEY, JSON.stringify(cfg));
+    setSyncStatus('ok','Firebase · live');
+    setStorageLabel('Firebase (real-time sync)');
+    return true;
+  } catch(e) {
+    console.warn('Firebase connect failed:', e.message);
+    return false;
+  }
 }
 
-async function fbDelete(collName, id) {
+async function connectFromUI() {
+  const cfg = {
+    apiKey:      document.getElementById('fb-apiKey').value.trim(),
+    projectId:   document.getElementById('fb-projectId').value.trim(),
+    authDomain:  document.getElementById('fb-authDomain').value.trim(),
+    appId:       document.getElementById('fb-appId').value.trim(),
+  };
+  if (!cfg.apiKey || !cfg.projectId) { document.getElementById('fb-result').innerHTML='<span style="color:var(--red-text)">API Key and Project ID required.</span>'; return; }
+  document.getElementById('fb-result').innerHTML='<span style="color:var(--text2)">Connecting...</span>';
+  const ok = await tryConnectFirebase(cfg);
+  if (ok) {
+    // Also bake config into the page console so user can copy it
+    console.log('%c PM Hub Firebase config — paste into BAKED_CONFIG in the HTML file:', 'font-weight:bold;color:#185FA5');
+    console.log(JSON.stringify(cfg, null, 2));
+    document.getElementById('fb-result').innerHTML=`
+      <span style="color:var(--green-text)">Connected! Real-time sync active.</span><br>
+      <div style="margin-top:8px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:10px;font-size:11px;font-family:monospace;color:var(--text2);white-space:pre-wrap">// Paste this into your HTML file inside BAKED_CONFIG
+// so ALL team members auto-connect without setup:
+const BAKED_CONFIG = ${JSON.stringify(cfg, null, 2)};</div>`;
+    go('dashboard');
+  } else {
+    document.getElementById('fb-result').innerHTML='<span style="color:var(--red-text)">Connection failed — check your config values.</span>';
+  }
+}
+
+async function fbSet(col, id, data) {
   if (!db) return;
-  const { collection, doc, deleteDoc } = window._fbFirestore;
-  await deleteDoc(doc(collection(db, collName), id));
+  const {collection,doc,setDoc} = window._fb;
+  await setDoc(doc(collection(db,col), id), data);
+}
+async function fbDel(col, id) {
+  if (!db) return;
+  const {collection,doc,deleteDoc} = window._fb;
+  await deleteDoc(doc(collection(db,col), id));
 }
 
 function useLocal() {
-  if (fbUnsubscribe) { fbUnsubscribe(); fbUnsubscribe = null; }
-  db = null;
-  localStorage.removeItem(FB_CONFIG_KEY);
-  document.getElementById('storage-mode-label').textContent = 'Local browser storage';
-  setSyncStatus('ok', 'Local storage');
-  toast('Using local storage');
+  if (fbUnsubscribe) { fbUnsubscribe(); fbUnsubscribe=null; }
+  db=null;
+  localStorage.removeItem(FB_KEY);
+  setStorageLabel('Local browser storage');
+  setSyncStatus('ok','Local storage');
+  toast('Switched to local storage');
   go('dashboard');
 }
 
-function showFirebaseSetup() {
-  document.getElementById('firebase-setup').style.display = 'block';
+function setStorageLabel(txt) {
+  const el = document.getElementById('storage-mode-label');
+  if (el) el.textContent = txt;
 }
 
-// ── CRUD ──
-function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+// ── CRUD: FEATURES ──
+function uid() { return Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
 
 async function saveFeature() {
   const name = document.getElementById('f-name').value.trim();
   if (!name) { toast('Feature name is required'); return; }
+  const rawDue = document.getElementById('f-due').value;
   const f = {
-    id: editingFId || uid(),
-    name, team: v('f-team'), owner: v('f-owner'),
-    status: v('f-status'), priority: v('f-priority'),
-    quarter: v('f-quarter'), due: v('f-due'),
-    figma: v('f-figma'), notes: v('f-notes'),
-    updatedAt: Date.now()
+    id:       editingFId || uid(),
+    name,
+    team:     document.getElementById('f-team').value,
+    owner:    document.getElementById('f-owner').value,
+    status:   document.getElementById('f-status').value,
+    priority: document.getElementById('f-priority').value,
+    quarter:  document.getElementById('f-quarter').value,
+    due:      rawDue ? formatDueDate(rawDue) : '',
+    dueRaw:   rawDue,
+    figma:    document.getElementById('f-figma').value.trim(),
+    notes:    document.getElementById('f-notes').value.trim(),
+    updatedAt: Date.now(),
   };
   if (!editingFId) f.createdAt = Date.now();
-  const idx = features.findIndex(x => x.id === f.id);
-  if (idx >= 0) features[idx] = f; else features.push(f);
+  const idx = features.findIndex(x=>x.id===f.id);
+  if (idx>=0) features[idx]=f; else features.push(f);
   if (db) await fbSet('features', f.id, f); else saveLocal();
   closeModal('f-overlay');
   renderAll();
-  toast(editingFId ? 'Feature updated' : 'Feature added');
+  toast(editingFId ? 'Feature updated' : 'Feature added ✓');
+}
+
+function formatDueDate(iso) {
+  // Convert "2026-04-15" → "Apr 15"
+  if (!iso) return '';
+  try {
+    const d = new Date(iso+'T00:00:00');
+    return d.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+  } catch(e) { return iso; }
 }
 
 async function deleteFeature() {
   if (!editingFId) return;
-  features = features.filter(f => f.id !== editingFId);
-  if (db) await fbDelete('features', editingFId); else saveLocal();
+  features = features.filter(f=>f.id!==editingFId);
+  if (db) await fbDel('features', editingFId); else saveLocal();
   closeModal('f-overlay');
   renderAll();
   toast('Feature deleted');
 }
 
+// ── CRUD: MEMBERS ──
 async function saveMember() {
   const name = document.getElementById('m-name').value.trim();
   if (!name) { toast('Name is required'); return; }
-  const m = { id: editingMId || uid(), name, role: v('m-role'), squad: v('m-squad'), email: v('m-email') };
-  const idx = members.findIndex(x => x.id === m.id);
-  if (idx >= 0) members[idx] = m; else members.push(m);
+  const m = { id: editingMId||uid(), name, role:v('m-role'), squad:v('m-squad'), email:v('m-email') };
+  const idx = members.findIndex(x=>x.id===m.id);
+  if (idx>=0) members[idx]=m; else members.push(m);
   if (db) await fbSet('members', m.id, m); else saveLocal();
   closeModal('m-overlay');
-  renderTeam();
-  refreshOwnerList();
-  toast(editingMId ? 'Member updated' : 'Member added');
+  renderTeam(); refreshDropdowns();
+  toast(editingMId ? 'Member updated' : 'Member added ✓');
 }
 
 async function deleteMember() {
   if (!editingMId) return;
-  members = members.filter(m => m.id !== editingMId);
-  if (db) await fbDelete('members', editingMId); else saveLocal();
+  members = members.filter(m=>m.id!==editingMId);
+  if (db) await fbDel('members', editingMId); else saveLocal();
   closeModal('m-overlay');
-  renderTeam();
+  renderTeam(); refreshDropdowns();
   toast('Member removed');
 }
 
-// ── MODALS ──
+// ── CRUD: SQUADS ──
+async function saveSquad() {
+  const name = document.getElementById('sq-name').value.trim();
+  if (!name) { toast('Squad name is required'); return; }
+  const s = { id: editingSqId||('sq-'+uid()), name, color:v('sq-color') };
+  const idx = squads.findIndex(x=>x.id===s.id);
+  if (idx>=0) squads[idx]=s; else squads.push(s);
+  if (db) await fbSet('squads', s.id, s); else saveLocal();
+  closeModal('sq-overlay');
+  renderTeam(); refreshDropdowns();
+  toast(editingSqId ? 'Squad updated' : 'Squad added ✓');
+}
+
+async function deleteSquad() {
+  if (!editingSqId) return;
+  squads = squads.filter(s=>s.id!==editingSqId);
+  if (db) await fbDel('squads', editingSqId); else saveLocal();
+  closeModal('sq-overlay');
+  renderTeam(); refreshDropdowns();
+  toast('Squad deleted');
+}
+
+// ── MODALS: FEATURES ──
 function openAdd() {
-  editingFId = null;
-  document.getElementById('f-modal-title').textContent = 'Add feature';
-  document.getElementById('del-btn').style.display = 'none';
+  editingFId=null;
+  document.getElementById('f-modal-title').textContent='Add feature';
+  document.getElementById('del-btn').style.display='none';
   document.getElementById('del-confirm').classList.remove('show');
-  ['f-name','f-team','f-owner','f-due','f-figma','f-notes'].forEach(id => document.getElementById(id).value = '');
-  document.getElementById('f-status').value = 'planned';
-  document.getElementById('f-priority').value = 'Medium';
-  document.getElementById('f-quarter').value = document.getElementById('q-label').textContent;
-  document.getElementById('figma-hint').textContent = '';
-  refreshOwnerList();
+  document.getElementById('f-name').value='';
+  document.getElementById('f-status').value='planned';
+  document.getElementById('f-priority').value='Medium';
+  document.getElementById('f-quarter').value=document.getElementById('q-label').textContent;
+  document.getElementById('f-due').value='';
+  document.getElementById('f-figma').value='';
+  document.getElementById('f-notes').value='';
+  document.getElementById('figma-hint').textContent='';
+  refreshDropdowns();
+  document.getElementById('f-team').value='';
+  document.getElementById('f-owner').value='';
   document.getElementById('f-overlay').classList.add('open');
-  setTimeout(() => document.getElementById('f-name').focus(), 100);
+  setTimeout(()=>document.getElementById('f-name').focus(),100);
 }
 
 function openEdit(id) {
-  const f = features.find(x => x.id === id);
-  if (!f) return;
-  editingFId = id;
-  document.getElementById('f-modal-title').textContent = 'Edit feature';
-  document.getElementById('del-btn').style.display = 'block';
+  const f = features.find(x=>x.id===id); if(!f) return;
+  editingFId=id;
+  document.getElementById('f-modal-title').textContent='Edit feature';
+  document.getElementById('del-btn').style.display='block';
   document.getElementById('del-confirm').classList.remove('show');
-  document.getElementById('f-name').value = f.name;
-  document.getElementById('f-team').value = f.team || '';
-  document.getElementById('f-owner').value = f.owner || '';
-  document.getElementById('f-status').value = f.status || 'planned';
-  document.getElementById('f-priority').value = f.priority || 'Medium';
-  document.getElementById('f-quarter').value = f.quarter || 'Q2 2026';
-  document.getElementById('f-due').value = f.due || '';
-  document.getElementById('f-figma').value = f.figma || '';
-  document.getElementById('f-notes').value = f.notes || '';
+  document.getElementById('f-name').value=f.name;
+  document.getElementById('f-status').value=f.status||'planned';
+  document.getElementById('f-priority').value=f.priority||'Medium';
+  document.getElementById('f-quarter').value=f.quarter||'Q2 2026';
+  document.getElementById('f-due').value=f.dueRaw||'';
+  document.getElementById('f-figma').value=f.figma||'';
+  document.getElementById('f-notes').value=f.notes||'';
   previewFigma();
-  refreshOwnerList();
+  refreshDropdowns();
+  document.getElementById('f-team').value=f.team||'';
+  document.getElementById('f-owner').value=f.owner||'';
   document.getElementById('f-overlay').classList.add('open');
 }
 
-function openAddMember() {
-  editingMId = null;
-  document.getElementById('m-modal-title').textContent = 'Add team member';
-  document.getElementById('m-del-btn').style.display = 'none';
+// ── MODALS: MEMBERS ──
+function openAddMember(squadName) {
+  editingMId=null;
+  document.getElementById('m-modal-title').textContent='Add team member';
+  document.getElementById('m-del-btn').style.display='none';
   document.getElementById('m-del-confirm').classList.remove('show');
-  ['m-name','m-role','m-email'].forEach(id => document.getElementById(id).value = '');
-  document.getElementById('m-squad').value = 'Dev';
+  ['m-name','m-role','m-email'].forEach(id=>document.getElementById(id).value='');
+  refreshSquadSelect();
+  if (squadName) document.getElementById('m-squad').value=squadName;
   document.getElementById('m-overlay').classList.add('open');
-  setTimeout(() => document.getElementById('m-name').focus(), 100);
+  setTimeout(()=>document.getElementById('m-name').focus(),100);
 }
 
 function openEditMember(id) {
-  const m = members.find(x => x.id === id);
-  if (!m) return;
-  editingMId = id;
-  document.getElementById('m-modal-title').textContent = 'Edit member';
-  document.getElementById('m-del-btn').style.display = 'block';
+  const m = members.find(x=>x.id===id); if(!m) return;
+  editingMId=id;
+  document.getElementById('m-modal-title').textContent='Edit member';
+  document.getElementById('m-del-btn').style.display='block';
   document.getElementById('m-del-confirm').classList.remove('show');
-  document.getElementById('m-name').value = m.name;
-  document.getElementById('m-role').value = m.role || '';
-  document.getElementById('m-squad').value = m.squad || 'Dev';
-  document.getElementById('m-email').value = m.email || '';
+  document.getElementById('m-name').value=m.name;
+  document.getElementById('m-role').value=m.role||'';
+  document.getElementById('m-email').value=m.email||'';
+  refreshSquadSelect();
+  document.getElementById('m-squad').value=m.squad||'';
   document.getElementById('m-overlay').classList.add('open');
 }
 
+// ── MODALS: SQUADS ──
+function openAddSquad() {
+  editingSqId=null;
+  document.getElementById('sq-modal-title').textContent='Add squad';
+  document.getElementById('sq-del-btn').style.display='none';
+  document.getElementById('sq-del-confirm').classList.remove('show');
+  document.getElementById('sq-name').value='';
+  document.getElementById('sq-color').value='blue';
+  document.getElementById('sq-overlay').classList.add('open');
+  setTimeout(()=>document.getElementById('sq-name').focus(),100);
+}
+
+function openEditSquad(id) {
+  const s = squads.find(x=>x.id===id); if(!s) return;
+  editingSqId=id;
+  document.getElementById('sq-modal-title').textContent='Edit squad';
+  document.getElementById('sq-del-btn').style.display='block';
+  document.getElementById('sq-del-confirm').classList.remove('show');
+  document.getElementById('sq-name').value=s.name;
+  document.getElementById('sq-color').value=s.color||'blue';
+  document.getElementById('sq-overlay').classList.add('open');
+}
+
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
-function showDel() { document.getElementById('del-confirm').classList.add('show'); }
-function hideDel() { document.getElementById('del-confirm').classList.remove('show'); }
-function showMDel() { document.getElementById('m-del-confirm').classList.add('show'); }
-function hideMDel() { document.getElementById('m-del-confirm').classList.remove('show'); }
+function showDel()   { document.getElementById('del-confirm').classList.add('show'); }
+function hideDel()   { document.getElementById('del-confirm').classList.remove('show'); }
+function showMDel()  { document.getElementById('m-del-confirm').classList.add('show'); }
+function hideMDel()  { document.getElementById('m-del-confirm').classList.remove('show'); }
+function showSqDel() { document.getElementById('sq-del-confirm').classList.add('show'); }
+function hideSqDel() { document.getElementById('sq-del-confirm').classList.remove('show'); }
 
 function previewFigma() {
   const url = document.getElementById('f-figma').value.trim();
-  const el = document.getElementById('figma-hint');
-  if (url.includes('figma.com')) el.innerHTML = `<a href="${url}" target="_blank" style="color:var(--purple)">Preview Figma link ↗</a>`;
-  else if (url) el.textContent = 'URL saved as-is';
-  else el.textContent = '';
+  const el  = document.getElementById('figma-hint');
+  if (url.includes('figma.com')) el.innerHTML=`<a href="${url}" target="_blank" style="color:var(--purple)">Preview Figma link ↗</a>`;
+  else if (url) el.textContent='URL saved as-is';
+  else el.textContent='';
 }
 
-function refreshOwnerList() {
-  const dl = document.getElementById('owner-list');
-  dl.innerHTML = members.map(m => `<option value="${esc(m.name)}">`).join('');
+function refreshSquadSelect() {
+  const sel = document.getElementById('m-squad');
+  sel.innerHTML = '<option value="">— select squad —</option>' +
+    squads.map(s=>`<option value="${esc(s.name)}">${esc(s.name)}</option>`).join('');
 }
 
-// ── RENDER ──
+function refreshDropdowns() {
+  // Team dropdown in feature modal
+  const tSel = document.getElementById('f-team');
+  if (tSel) {
+    const cur = tSel.value;
+    tSel.innerHTML = '<option value="">— select squad —</option>' +
+      squads.map(s=>`<option value="${esc(s.name)}">${esc(s.name)}</option>`).join('');
+    if (cur) tSel.value=cur;
+  }
+  // Owner dropdown in feature modal
+  const oSel = document.getElementById('f-owner');
+  if (oSel) {
+    const cur = oSel.value;
+    oSel.innerHTML = '<option value="">— select member —</option>' +
+      members.map(m=>`<option value="${esc(m.name)}">${esc(m.name)} (${esc(m.squad||'')})</option>`).join('');
+    if (cur) oSel.value=cur;
+  }
+  // Squad dropdown in member modal
+  refreshSquadSelect();
+}
+
+// ── RENDER ALL ──
 function renderAll() {
   renderMetrics(); renderDashActive(); renderDashProgress(); renderDashDeadlines();
   renderFeatures(); renderRoadmap(); renderTeam(); renderReport();
-  document.getElementById('nb-features').textContent = features.length;
+  document.getElementById('nb-features').textContent=features.length;
+  refreshDropdowns();
 }
 
 function qFeatures() {
   const q = document.getElementById('q-label').textContent;
-  const qf = features.filter(f => f.quarter === q);
+  const qf = features.filter(f=>f.quarter===q);
   return qf.length ? qf : features;
 }
 
+// ── METRICS ──
 function renderMetrics() {
-  const src = qFeatures();
-  const done = src.filter(f => f.status === 'done').length;
-  const blocked = src.filter(f => f.status === 'blocked').length;
-  const ip = src.filter(f => f.status === 'inprogress').length;
-  document.getElementById('m-total').textContent = src.length;
-  document.getElementById('m-ip').textContent = ip;
-  document.getElementById('m-done').textContent = done;
-  document.getElementById('m-blocked').textContent = blocked;
-  document.getElementById('m-done-sub').textContent = done > 0 ? `${Math.round(done/src.length*100)}% complete` : 'None yet';
-  document.getElementById('m-blocked-sub').textContent = blocked > 0 ? 'Needs attention' : 'All clear';
+  const src=qFeatures();
+  const done=src.filter(f=>f.status==='done').length;
+  const blocked=src.filter(f=>f.status==='blocked').length;
+  document.getElementById('m-total').textContent=src.length;
+  document.getElementById('m-ip').textContent=src.filter(f=>f.status==='inprogress').length;
+  document.getElementById('m-done').textContent=done;
+  document.getElementById('m-blocked').textContent=blocked;
+  document.getElementById('m-done-sub').textContent=done>0?Math.round(done/src.length*100)+'% complete':'None yet';
+  document.getElementById('m-blocked-sub').textContent=blocked>0?'Needs attention':'All clear';
 }
 
+// ── DASHBOARD PANELS ──
 function renderDashActive() {
-  const active = features.filter(f => ['inprogress','review','blocked','design'].includes(f.status)).slice(0, 6);
-  const el = document.getElementById('dash-active');
-  if (!active.length) { el.innerHTML = '<div class="empty"><div class="empty-icon">⬡</div>No active features yet.<br><button class="btn btn-primary btn-sm" style="margin-top:8px" onclick="openAdd()">Add first feature</button></div>'; return; }
-  el.innerHTML = active.map(f => fItemHTML(f)).join('');
+  const active=features.filter(f=>['inprogress','review','blocked','design'].includes(f.status)).slice(0,6);
+  const el=document.getElementById('dash-active');
+  if(!active.length){el.innerHTML='<div class="empty"><div class="empty-icon">⬡</div>No active features yet.<br><button class="btn btn-primary btn-sm" style="margin-top:8px" onclick="openAdd()">Add first feature</button></div>';return;}
+  el.innerHTML=active.map(f=>fItemHTML(f)).join('');
 }
 
 function renderDashProgress() {
-  const el = document.getElementById('dash-prog');
-  const groups = {};
-  features.forEach(f => {
-    (f.team || 'Unassigned').split(/[+,&]/).map(t => t.trim()).filter(Boolean).forEach(t => {
-      if (!groups[t]) groups[t] = [];
-      groups[t].push(f);
-    });
+  const el=document.getElementById('dash-prog');
+  const groups={};
+  features.forEach(f=>{
+    const t=f.team||'Unassigned';
+    if(!groups[t]) groups[t]=[];
+    groups[t].push(f);
   });
-  const colors = ['#185FA5','#534AB7','#0F6E56','#854F0B','#A32D2D'];
-  let html = '';
-  Object.entries(groups).slice(0,5).forEach(([team, items], i) => {
-    const pct = items.length ? Math.round((
-      items.filter(f=>f.status==='done').length +
-      items.filter(f=>f.status==='review').length * 0.75 +
-      items.filter(f=>f.status==='inprogress').length * 0.5
-    ) / items.length * 100) : 0;
-    html += `<div style="margin-bottom:12px">
+  const colors=['#185FA5','#534AB7','#0F6E56','#854F0B','#A32D2D'];
+  let html='';
+  Object.entries(groups).slice(0,5).forEach(([team,items],i)=>{
+    const pct=items.length?Math.round((
+      items.filter(f=>f.status==='done').length+
+      items.filter(f=>f.status==='review').length*0.75+
+      items.filter(f=>f.status==='inprogress').length*0.5
+    )/items.length*100):0;
+    html+=`<div style="margin-bottom:12px">
       <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-size:12px;color:var(--text2)">${esc(team)}</span><span style="font-size:12px;font-weight:500">${pct}%</span></div>
       <div class="prog-bar"><div class="prog-fill" style="width:${pct}%;background:${colors[i%colors.length]}"></div></div>
     </div>`;
   });
-  el.innerHTML = html || '<div style="color:var(--text3);font-size:13px">Add features with team names to see progress.</div>';
+  el.innerHTML=html||'<div style="color:var(--text3);font-size:13px">Add features with team assigned to see progress.</div>';
 }
 
 function renderDashDeadlines() {
-  const el = document.getElementById('dash-deadlines');
-  const upcoming = features.filter(f => f.due && f.status !== 'done').slice(0, 6);
-  if (!upcoming.length) { el.innerHTML = '<div style="color:var(--text3);font-size:13px;grid-column:1/-1">No upcoming deadlines.</div>'; return; }
-  el.innerHTML = upcoming.map(f => `
+  const el=document.getElementById('dash-deadlines');
+  const upcoming=features.filter(f=>f.due&&f.status!=='done').slice(0,6);
+  if(!upcoming.length){el.innerHTML='<div style="color:var(--text3);font-size:13px;grid-column:1/-1">No upcoming deadlines.</div>';return;}
+  el.innerHTML=upcoming.map(f=>`
     <div style="background:var(--bg2);border-radius:var(--r);padding:11px;border:1px solid var(--border);cursor:pointer" onclick="openEdit('${f.id}')">
       <div style="font-size:10px;color:var(--text3);margin-bottom:3px">${esc(f.due)}</div>
       <div style="font-size:13px;font-weight:500;color:var(--text)">${esc(f.name)}</div>
@@ -768,8 +932,9 @@ function renderDashDeadlines() {
     </div>`).join('');
 }
 
+// ── FEATURE LIST ──
 function fItemHTML(f) {
-  const figmaBtn = f.figma ? `<a href="${f.figma}" target="_blank" class="figma-btn" onclick="event.stopPropagation()">Figma ↗</a>` : '';
+  const figmaBtn=f.figma?`<a href="${f.figma}" target="_blank" class="figma-btn" onclick="event.stopPropagation()">Figma ↗</a>`:'';
   return `<div class="f-item" onclick="openEdit('${f.id}')">
     <div class="f-dot d-${f.status||'planned'}"></div>
     <div class="f-info">
@@ -781,40 +946,37 @@ function fItemHTML(f) {
 }
 
 function renderFeatures() {
-  const search = (document.getElementById('search-box')?.value || '').toLowerCase();
-  let src = currentFilter === 'all' ? features : features.filter(f => f.status === currentFilter);
-  if (search) src = src.filter(f => (f.name+f.team+f.owner+f.notes).toLowerCase().includes(search));
-  const el = document.getElementById('feature-list');
-  if (!src.length) {
-    el.innerHTML = '<div class="empty"><div class="empty-icon">⬡</div>' +
-      (features.length === 0 ? 'No features yet.<br><button class="btn btn-primary btn-sm" style="margin-top:8px" onclick="openAdd()">Add your first feature</button>' : 'No features match this filter.') + '</div>';
+  const search=(document.getElementById('search-box')?.value||'').toLowerCase();
+  let src=currentFilter==='all'?features:features.filter(f=>f.status===currentFilter);
+  if(search) src=src.filter(f=>(f.name+f.team+f.owner+f.notes).toLowerCase().includes(search));
+  const el=document.getElementById('feature-list');
+  if(!src.length){
+    el.innerHTML='<div class="empty"><div class="empty-icon">⬡</div>'+(features.length===0?'No features yet.<br><button class="btn btn-primary btn-sm" style="margin-top:8px" onclick="openAdd()">Add your first feature</button>':'No features match this filter.')+'</div>';
     return;
   }
-  el.innerHTML = src.map(f => fItemHTML(f)).join('');
+  el.innerHTML=src.map(f=>fItemHTML(f)).join('');
 }
 
-function setFilter(s, btn) {
-  currentFilter = s;
-  document.querySelectorAll('.fpill').forEach(p => p.classList.remove('active'));
+function setFilter(s,btn) {
+  currentFilter=s;
+  document.querySelectorAll('.fpill').forEach(p=>p.classList.remove('active'));
   btn.classList.add('active');
   renderFeatures();
 }
 
+// ── ROADMAP ──
 function renderRoadmap() {
-  const byQ = {};
-  features.forEach(f => { if (!byQ[f.quarter]) byQ[f.quarter] = []; byQ[f.quarter].push(f); });
-  const el = document.getElementById('roadmap-content');
-  if (!Object.keys(byQ).length) {
-    el.innerHTML = '<div class="empty"><div class="empty-icon">↗</div>No roadmap data. Add features with a quarter assigned.</div>';
-    return;
-  }
-  const currentQ = document.getElementById('q-label').textContent;
-  el.innerHTML = Object.entries(byQ).map(([q, items]) => `
+  const byQ={};
+  features.forEach(f=>{if(!byQ[f.quarter])byQ[f.quarter]=[];byQ[f.quarter].push(f);});
+  const el=document.getElementById('roadmap-content');
+  if(!Object.keys(byQ).length){el.innerHTML='<div class="empty"><div class="empty-icon">↗</div>No roadmap data. Add features with a quarter assigned.</div>';return;}
+  const currentQ=document.getElementById('q-label').textContent;
+  el.innerHTML=Object.entries(byQ).map(([q,items])=>`
     <div class="rm-q">
       <div class="rm-q-head">${esc(q)} <span class="badge rm-q-lbl ${q===currentQ?'b-inprogress':'b-planned'}">${q===currentQ?'Current':'Planned'}</span></div>
-      ${items.map(f => `
+      ${items.map(f=>`
         <div class="rm-row" onclick="openEdit('${f.id}')">
-          <div style="font-size:10px;font-weight:600;color:var(--text3);width:26px;flex-shrink:0">${esc((f.due||'').substring(0,3))}</div>
+          <div style="font-size:10px;font-weight:600;color:var(--text3);width:26px;flex-shrink:0">${esc((f.due||'').substring(0,6))}</div>
           <div style="flex:1;min-width:0">
             <div style="font-size:13px;font-weight:500;color:var(--text)">${esc(f.name)}</div>
             <div style="font-size:11px;color:var(--text3)">${esc(f.team||'')}${f.owner?' · '+esc(f.owner):''}</div>
@@ -827,193 +989,203 @@ function renderRoadmap() {
     </div>`).join('');
 }
 
+// ── TEAM ──
 function renderTeam() {
-  const avFor = (m, i) => {
-    const [bg, color] = AV_COLORS[i % AV_COLORS.length].split(':');
-    const initials = m.name.split(' ').map(w=>w[0]).join('').substring(0,2).toUpperCase();
-    const tasks = features.filter(f => f.owner === m.name && f.status !== 'done').length;
-    return `<div class="team-row" onclick="openEditMember('${m.id}')" style="cursor:pointer">
-      <div class="team-av" style="background:${bg};color:${color}">${initials}</div>
-      <div style="flex:1">
-        <div style="font-size:13px;font-weight:500;color:var(--text)">${esc(m.name)}</div>
-        <div style="font-size:11px;color:var(--text3)">${esc(m.role||m.squad||'')}</div>
-      </div>
-      <span class="badge b-inprogress">${tasks} active</span>
-    </div>`;
-  };
+  // Squads section (grouped cards)
+  const sqEl = document.getElementById('team-squads');
+  if (sqEl) {
+    if (!squads.length) {
+      sqEl.innerHTML='<div class="empty">No squads yet. Click "Add squad" to create one.</div>';
+    } else {
+      sqEl.innerHTML=`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;margin-bottom:16px">` +
+        squads.map(s=>{
+          const c=SQUAD_COLORS[s.color]||SQUAD_COLORS.blue;
+          const sqMembers=members.filter(m=>m.squad===s.name);
+          return `<div class="card" style="padding:14px">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+              <div style="display:flex;align-items:center;gap:8px">
+                <div style="width:10px;height:10px;border-radius:50%;background:${c.dot}"></div>
+                <span style="font-size:13px;font-weight:600;color:var(--text)">${esc(s.name)}</span>
+                <span class="badge" style="background:${c.bg};color:${c.text}">${sqMembers.length} members</span>
+              </div>
+              <button class="btn btn-sm" onclick="openEditSquad('${s.id}')" style="font-size:10px;padding:2px 7px">Edit</button>
+            </div>
+            ${sqMembers.map((m,i)=>memberRowHTML(m,i)).join('')}
+            <button class="btn btn-sm" style="width:100%;margin-top:8px;font-size:11px" onclick="openAddMember('${esc(s.name)}')">+ Add to ${esc(s.name)}</button>
+          </div>`;
+        }).join('') + '</div>';
+    }
+  }
 
-  const empty = '<div style="color:var(--text3);font-size:13px">No members yet — <button class="btn btn-sm" onclick="openAddMember()">add one</button></div>';
-  const dev = members.filter(m => m.squad === 'Dev');
-  const uiux = members.filter(m => m.squad === 'UI/UX');
-  document.getElementById('team-dev').innerHTML = dev.length ? dev.map((m,i)=>avFor(m,i)).join('') : empty;
-  document.getElementById('team-uiux').innerHTML = uiux.length ? uiux.map((m,i)=>avFor(m,i+2)).join('') : empty;
-  document.getElementById('team-all').innerHTML = members.length ? members.map((m,i)=>avFor(m,i)).join('') : empty;
+  // All members
+  const allEl=document.getElementById('team-all');
+  if(allEl) allEl.innerHTML=members.length?members.map((m,i)=>memberRowHTML(m,i)).join(''):'<div style="color:var(--text3);font-size:13px">No members yet.</div>';
 }
 
+function memberRowHTML(m, i) {
+  const sq=squads.find(s=>s.name===m.squad);
+  const c=sq?SQUAD_COLORS[sq.color]||SQUAD_COLORS.blue:SQUAD_COLORS.gray;
+  const initials=m.name.split(' ').map(w=>w[0]).join('').substring(0,2).toUpperCase();
+  const tasks=features.filter(f=>f.owner===m.name&&f.status!=='done').length;
+  return `<div class="team-row" onclick="openEditMember('${m.id}')" style="cursor:pointer">
+    <div class="team-av" style="background:${c.bg};color:${c.text}">${initials}</div>
+    <div style="flex:1">
+      <div style="font-size:13px;font-weight:500;color:var(--text)">${esc(m.name)}</div>
+      <div style="font-size:11px;color:var(--text3)">${esc(m.role||m.squad||'')}</div>
+    </div>
+    <span class="badge b-inprogress">${tasks} active</span>
+  </div>`;
+}
+
+// ── REPORT ──
 function renderReport() {
-  const q = document.getElementById('q-label').textContent;
-  const src = qFeatures();
-  const done = src.filter(f=>f.status==='done');
-  const blocked = src.filter(f=>f.status==='blocked');
-  const ip = src.filter(f=>f.status==='inprogress');
-  document.getElementById('rpt-q').textContent = q;
-  document.getElementById('rpt-stats').innerHTML = [
-    ['Quarter', q],
-    ['Features committed', src.length],
-    ['Completed', `${done.length} of ${src.length}`],
-    ['In progress', ip.length],
-    ['Blocked', blocked.length > 0 ? `${blocked.length} — needs attention` : '0 — all clear'],
-    ['Completion rate', src.length ? Math.round(done.length/src.length*100)+'%' : '—'],
-  ].map(([k,v]) => `<div class="rpt-stat"><span style="color:var(--text2)">${k}</span><span style="font-weight:500;${k==='Blocked'&&blocked.length?'color:var(--red-text)':''}">${v}</span></div>`).join('');
-  document.getElementById('rpt-hi').innerHTML = done.map(f=>`✓ ${esc(f.name)} shipped`).join('<br>') || 'No completed features yet.';
-  document.getElementById('rpt-risk').innerHTML = blocked.map(f=>`⚠ ${esc(f.name)}${f.notes?' — '+esc(f.notes):''}`).join('<br>') || 'No blockers currently.';
-  document.getElementById('rpt-breakdown').innerHTML = `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">` +
-    Object.entries(LABEL).map(([s,l]) => {
-      const n = src.filter(f=>f.status===s).length;
+  const q=document.getElementById('q-label').textContent;
+  const src=qFeatures();
+  const done=src.filter(f=>f.status==='done');
+  const blocked=src.filter(f=>f.status==='blocked');
+  const ip=src.filter(f=>f.status==='inprogress');
+  document.getElementById('rpt-q').textContent=q;
+  document.getElementById('rpt-stats').innerHTML=[
+    ['Quarter',q],['Features committed',src.length],
+    ['Completed',`${done.length} of ${src.length}`],
+    ['In progress',ip.length],
+    ['Blocked',blocked.length>0?`${blocked.length} — needs attention`:'0 — all clear'],
+    ['Completion rate',src.length?Math.round(done.length/src.length*100)+'%':'—'],
+  ].map(([k,val])=>`<div class="rpt-stat"><span style="color:var(--text2)">${k}</span><span style="font-weight:500;${k==='Blocked'&&blocked.length?'color:var(--red-text)':''}">${val}</span></div>`).join('');
+  document.getElementById('rpt-hi').innerHTML=done.map(f=>`✓ ${esc(f.name)} shipped`).join('<br>')||'No completed features yet.';
+  document.getElementById('rpt-risk').innerHTML=blocked.map(f=>`⚠ ${esc(f.name)}${f.notes?' — '+esc(f.notes):''}`).join('<br>')||'No blockers currently.';
+  document.getElementById('rpt-breakdown').innerHTML=`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">`+
+    Object.entries(LABEL).map(([s,l])=>{
+      const n=src.filter(f=>f.status===s).length;
       return `<div style="background:var(--bg2);border-radius:var(--r);padding:11px;border:1px solid var(--border)"><div style="font-size:10px;color:var(--text3);margin-bottom:3px">${l}</div><div style="font-size:20px;font-weight:600;color:var(--text)">${n}</div></div>`;
-    }).join('') + '</div>';
+    }).join('')+'</div>';
 }
 
 // ── AI CHAT ──
 async function sendMsg() {
-  const input = document.getElementById('chat-in');
-  const text = input.value.trim();
-  if (!text) return;
-  input.value = '';
-  addMsg('user', text);
-  chatHistory.push({role:'user', content:text});
-  const lid = addLoader();
-  const ctx = `You are a PM assistant. Quarter: ${document.getElementById('q-label').textContent}. Features: ${JSON.stringify(features.slice(0,40))}. Team: ${JSON.stringify(members)}. Blocked: ${features.filter(f=>f.status==='blocked').length}. Done: ${features.filter(f=>f.status==='done').length}. Be concise, actionable, use bullet points for lists.`;
+  const input=document.getElementById('chat-in');
+  const text=input.value.trim(); if(!text) return;
+  input.value='';
+  addMsg('user',text);
+  chatHistory.push({role:'user',content:text});
+  const lid=addLoader();
+  const ctx=`You are a PM assistant. Quarter: ${document.getElementById('q-label').textContent}. Features: ${JSON.stringify(features.slice(0,40))}. Team: ${JSON.stringify(members)}. Squads: ${JSON.stringify(squads)}. Blocked: ${features.filter(f=>f.status==='blocked').length}. Done: ${features.filter(f=>f.status==='done').length}. Be concise, actionable, use bullet points.`;
   try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,system:ctx,messages:chatHistory})
-    });
-    const data = await res.json();
+    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,system:ctx,messages:chatHistory})});
+    const data=await res.json();
     removeLoader(lid);
-    const reply = (data.content||[]).map(i=>i.text||'').join('');
-    chatHistory.push({role:'assistant', content:reply});
-    addMsg('ai', reply);
-  } catch(e) {
-    removeLoader(lid);
-    addMsg('ai', 'Could not reach AI. Check your connection.');
-  }
+    const reply=(data.content||[]).map(i=>i.text||'').join('');
+    chatHistory.push({role:'assistant',content:reply});
+    addMsg('ai',reply);
+  } catch(e) { removeLoader(lid); addMsg('ai','Could not reach AI. Check your connection.'); }
 }
 
-function sq(t) { document.getElementById('chat-in').value = t; sendMsg(); }
-function aiReport() { go('chat'); sq('Generate a full professional VP executive report for this quarter including overview, highlights, risks, blockers, team performance, and Q3 planning preview.'); }
+function sq(t){document.getElementById('chat-in').value=t;sendMsg();}
+function aiReport(){go('chat');sq('Generate a full professional VP executive report for this quarter including overview, highlights, risks, blockers, team performance, and next quarter planning preview.');}
 
-function addMsg(role, text) {
-  const el = document.getElementById('chat-msgs');
-  const d = document.createElement('div');
-  d.className = 'msg' + (role==='user'?' user':'');
-  d.innerHTML = `<div class="msg-av av-${role==='ai'?'ai':'user'}">${role==='ai'?'AI':'PM'}</div><div class="msg-bubble">${text.replace(/\n/g,'<br>').replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>')}</div>`;
-  el.appendChild(d);
-  el.scrollTop = el.scrollHeight;
+function addMsg(role,text) {
+  const el=document.getElementById('chat-msgs');
+  const d=document.createElement('div');
+  d.className='msg'+(role==='user'?' user':'');
+  d.innerHTML=`<div class="msg-av av-${role==='ai'?'ai':'user'}">${role==='ai'?'AI':'PM'}</div><div class="msg-bubble">${text.replace(/
+/g,'<br>').replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>')}</div>`;
+  el.appendChild(d); el.scrollTop=el.scrollHeight;
 }
 function addLoader() {
-  const el = document.getElementById('chat-msgs');
-  const d = document.createElement('div');
-  d.className = 'msg'; const id='ld'+Date.now(); d.id=id;
-  d.innerHTML = `<div class="msg-av av-ai">AI</div><div class="msg-bubble"><div class="ldots"><span></span><span></span><span></span></div></div>`;
-  el.appendChild(d); el.scrollTop = el.scrollHeight; return id;
+  const el=document.getElementById('chat-msgs');
+  const d=document.createElement('div');
+  d.className='msg'; const id='ld'+Date.now(); d.id=id;
+  d.innerHTML=`<div class="msg-av av-ai">AI</div><div class="msg-bubble"><div class="ldots"><span></span><span></span><span></span></div></div>`;
+  el.appendChild(d); el.scrollTop=el.scrollHeight; return id;
 }
-function removeLoader(id) { const e=document.getElementById(id); if(e) e.remove(); }
+function removeLoader(id){const e=document.getElementById(id);if(e)e.remove();}
 
 // ── EXPORT / IMPORT ──
 function exportData() {
-  const blob = new Blob([JSON.stringify({features, members, exportedAt: new Date().toISOString()}, null, 2)], {type:'application/json'});
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `pmhub-backup-${new Date().toISOString().slice(0,10)}.json`;
-  a.click();
-  toast('Data exported');
+  const blob=new Blob([JSON.stringify({features,members,squads,exportedAt:new Date().toISOString()},null,2)],{type:'application/json'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=`pmhub-backup-${new Date().toISOString().slice(0,10)}.json`;
+  a.click(); toast('Data exported');
 }
-
-function triggerImport() { document.getElementById('import-file').click(); }
-
+function triggerImport(){document.getElementById('import-file').click();}
 function importData(e) {
-  const file = e.target.files[0]; if (!file) return;
-  const reader = new FileReader();
-  reader.onload = async ev => {
+  const file=e.target.files[0]; if(!file) return;
+  const reader=new FileReader();
+  reader.onload=async ev=>{
     try {
-      const d = JSON.parse(ev.target.result);
-      features = d.features || [];
-      members = d.members || [];
-      if (db) {
-        for (const f of features) await fbSet('features', f.id, f);
-        for (const m of members) await fbSet('members', m.id, m);
-      } else {
-        saveLocal();
-      }
-      renderAll();
-      toast(`Imported ${features.length} features, ${members.length} members`);
-    } catch(err) { toast('Import failed — invalid JSON file'); }
+      const d=JSON.parse(ev.target.result);
+      features=d.features||[]; members=d.members||[]; squads=d.squads||defaultSquads();
+      if(db){
+        for(const f of features) await fbSet('features',f.id,f);
+        for(const m of members) await fbSet('members',m.id,m);
+        for(const s of squads)  await fbSet('squads',s.id,s);
+      } else { saveLocal(); }
+      renderAll(); toast(`Imported ${features.length} features, ${members.length} members`);
+    } catch(err){toast('Import failed — invalid JSON');}
   };
-  reader.readAsText(file);
-  e.target.value = '';
+  reader.readAsText(file); e.target.value='';
 }
 
 // ── NAV ──
-const VIEW_TITLES = {dashboard:'Dashboard',features:'Feature tracker',roadmap:'Roadmap',team:'Team',report:'VP Report',chat:'AI Assistant',setup:'Settings'};
+const VIEW_TITLES={dashboard:'Dashboard',features:'Feature tracker',roadmap:'Roadmap',team:'Team',report:'VP Report',chat:'AI Assistant',setup:'Settings'};
 function go(v) {
-  document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
-  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.view').forEach(el=>el.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(el=>el.classList.remove('active'));
   document.getElementById('view-'+v).classList.add('active');
-  document.getElementById('view-title').textContent = VIEW_TITLES[v]||v;
-  document.querySelectorAll('.nav-item').forEach(el => {
-    const t = el.textContent.trim().toLowerCase();
-    if (t.startsWith(v.substring(0,4)) || (v==='report'&&t.includes('vp')) || (v==='chat'&&t.includes('ai'))) el.classList.add('active');
+  document.getElementById('view-title').textContent=VIEW_TITLES[v]||v;
+  document.querySelectorAll('.nav-item').forEach(el=>{
+    const t=el.textContent.trim().toLowerCase();
+    if(t.startsWith(v.substring(0,4))||(v==='report'&&t.includes('vp'))||(v==='chat'&&t.includes('ai'))) el.classList.add('active');
   });
 }
 
 // ── SYNC STATUS ──
-function setSyncStatus(state, msg) {
-  const dot = document.getElementById('sdot');
-  dot.className = 'sync-dot' + (state==='loading'?' loading':state==='error'?' error':'');
-  document.getElementById('stext').textContent = msg;
+function setSyncStatus(state,msg) {
+  const dot=document.getElementById('sdot');
+  dot.className='sync-dot'+(state==='loading'?' loading':state==='error'?' error':'');
+  document.getElementById('stext').textContent=msg;
 }
 
 // ── UTILS ──
-function v(id) { return document.getElementById(id).value.trim(); }
-function esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-function toast(msg) {
-  const t = document.getElementById('toast');
-  t.textContent = msg; t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 2500);
-}
+function v(id){return document.getElementById(id).value.trim();}
+function esc(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2500);}
 
 // ── INIT ──
 loadLocal();
 
-// Try to restore Firebase if previously configured
-const savedFb = localStorage.getItem(FB_CONFIG_KEY);
-if (savedFb) {
-  try {
-    const cfg = JSON.parse(savedFb);
-    initFirebase(cfg).then(() => {
-      document.getElementById('storage-mode-label').textContent = 'Firebase (real-time sync)';
-    }).catch(() => {
-      localStorage.removeItem(FB_CONFIG_KEY);
-      setSyncStatus('ok','Local storage');
-    });
-  } catch(e) { setSyncStatus('ok','Local storage'); }
+// Determine which Firebase config to use:
+// Priority: 1) BAKED_CONFIG in file, 2) localStorage saved config
+const fbCfg = BAKED_CONFIG || (() => { try { return JSON.parse(localStorage.getItem(FB_KEY)); } catch(e){ return null; } })();
+
+if (fbCfg && fbCfg.apiKey) {
+  setSyncStatus('loading','Connecting to Firebase...');
+  tryConnectFirebase(fbCfg).then(ok=>{
+    if (!ok) { setSyncStatus('ok','Local storage (Firebase failed)'); renderAll(); }
+    else { renderAll(); }
+  });
 } else {
   setSyncStatus('ok','Local storage');
+  renderAll();
 }
 
-renderAll();
-
-// Expose functions needed by inline onclick handlers
-window.go = go; window.openAdd = openAdd; window.openEdit = openEdit;
-window.openAddMember = openAddMember; window.openEditMember = openEditMember;
-window.closeModal = closeModal; window.saveFeature = saveFeature; window.deleteFeature = deleteFeature;
-window.saveMember = saveMember; window.deleteMember = deleteMember;
-window.showDel = showDel; window.hideDel = hideDel; window.showMDel = showMDel; window.hideMDel = hideMDel;
-window.setFilter = setFilter; window.previewFigma = previewFigma;
-window.sendMsg = sendMsg; window.sq = sq; window.aiReport = aiReport;
-window.exportData = exportData; window.triggerImport = triggerImport; window.importData = importData;
-window.connectFirebase = connectFirebase; window.useLocal = useLocal; window.showFirebaseSetup = showFirebaseSetup;
+// Expose to inline handlers
+window.go=go; window.openAdd=openAdd; window.openEdit=openEdit;
+window.openAddMember=openAddMember; window.openEditMember=openEditMember;
+window.openAddSquad=openAddSquad; window.openEditSquad=openEditSquad;
+window.closeModal=closeModal;
+window.saveFeature=saveFeature; window.deleteFeature=deleteFeature;
+window.saveMember=saveMember; window.deleteMember=deleteMember;
+window.saveSquad=saveSquad; window.deleteSquad=deleteSquad;
+window.showDel=showDel; window.hideDel=hideDel;
+window.showMDel=showMDel; window.hideMDel=hideMDel;
+window.showSqDel=showSqDel; window.hideSqDel=hideSqDel;
+window.setFilter=setFilter; window.previewFigma=previewFigma;
+window.sendMsg=sendMsg; window.sq=sq; window.aiReport=aiReport;
+window.exportData=exportData; window.triggerImport=triggerImport; window.importData=importData;
+window.connectFromUI=connectFromUI; window.useLocal=useLocal;
+window.showFirebaseSetup=()=>{document.getElementById('firebase-setup').style.display='block';};
 </script>
 </body>
 </html>
