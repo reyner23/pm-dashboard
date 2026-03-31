@@ -510,11 +510,16 @@ const SK='pmhub_data', FB_KEY='pmhub_fb_config';
 // ▼▼ PASTE YOUR FIREBASE CONFIG HERE after first connect ▼▼
 // Copy the block shown in Settings after connecting, replace null below:
 const BAKED_CONFIG = {
-  apiKey:     "AIzaSyDaObBzbYmo0fx-tSdupc2dUqyxDphsWL0",
-  projectId:  "pm-dashbord-prds",
+  apiKey: "AIzaSyDaObBzbYmo0fx-tSdupc2dUqyxDphsWL0",
   authDomain: "pm-dashbord-prds.firebaseapp.com",
-  appId:      "1:868621935833:web:ae78727ab855654fc30ac8"
+  projectId: "pm-dashbord-prds",
+  appId: "1:868621935833:web:ae78727ab855654fc30ac8"
 };
+// Example:
+// const BAKED_CONFIG = {
+//   apiKey:"AIzaSy...", projectId:"pm-hub-xxx",
+//   authDomain:"pm-hub-xxx.firebaseapp.com", appId:"1:123:web:abc"
+// };
 
 // ── LOCAL STORAGE ──
 function saveLocal() {
@@ -538,66 +543,98 @@ function defaultSquads() {
 
 // ── FIREBASE ──
 async function connectFirebase(cfg) {
-  // Load Firebase SDKs
+  // Load SDKs (10s timeout each)
   const {initializeApp, getApps} = await Promise.race([
     import('https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js'),
-    new Promise((_,r)=>setTimeout(()=>r(new Error('SDK timeout')),10000))
+    new Promise((_,r)=>setTimeout(()=>r(new Error('SDK load timeout')),10000))
   ]);
-  const fbfs = await Promise.race([
+  const {getFirestore, collection, onSnapshot, doc, setDoc, deleteDoc, enableIndexedDbPersistence} = await Promise.race([
     import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js'),
-    new Promise((_,r)=>setTimeout(()=>r(new Error('Firestore timeout')),10000))
+    new Promise((_,r)=>setTimeout(()=>r(new Error('Firestore load timeout')),10000))
   ]);
-  const {getFirestore, collection, onSnapshot, doc, setDoc, deleteDoc} = fbfs;
 
   const app = getApps().length ? getApps()[0] : initializeApp(cfg);
   _db = getFirestore(app);
 
-  // Store refs IMMEDIATELY — before any await or snapshot
+  // Set ALL refs immediately — critical so fbWrite works the instant first snapshot fires
   _col=collection; _doc=doc; _setDoc=setDoc; _deleteDoc=deleteDoc;
-  window._fb = {db:_db, collection, doc, setDoc, deleteDoc};
 
-  // Attach real-time listeners
+  // Detach old listeners
   if (_fbUnsub) _fbUnsub();
-  let ready = {f:false, m:false, s:false};
 
-  const u1 = onSnapshot(_col(_db,'features'),
-    snap=>{ features=snap.docs.map(d=>d.data()); ready.f=true; renderAll(); setSyncStatus('ok','Live · '+new Date().toLocaleTimeString()); },
-    err=>console.warn('features listener:',err.message));
+  // onSnapshot is the ONLY source of truth for state.
+  // It fires immediately with Firestore cache on repeat visits,
+  // then again when server data arrives. New visitors get server data ~1-2s.
+  let loaded = {f:false, m:false, s:false};
 
-  const u2 = onSnapshot(_col(_db,'members'),
-    snap=>{ members=snap.docs.map(d=>d.data()); ready.m=true; renderTeam(); refreshDropdowns(); },
-    err=>console.warn('members listener:',err.message));
+  const u1 = onSnapshot(
+    collection(_db, 'features'),
+    snap => {
+      features = snap.docs.map(d => ({...d.data()}));
+      loaded.f = true;
+      renderAll();
+      setSyncStatus('ok', 'Live · ' + new Date().toLocaleTimeString());
+      setLabel('Firebase (real-time sync)');
+    },
+    err => { console.warn('features:', err.code, err.message); }
+  );
 
-  const u3 = onSnapshot(_col(_db,'squads'),
-    snap=>{ const d=snap.docs.map(d=>d.data()); squads=d.length?d:defaultSquads(); ready.s=true; renderTeam(); refreshDropdowns(); },
-    err=>console.warn('squads listener:',err.message));
+  const u2 = onSnapshot(
+    collection(_db, 'members'),
+    snap => {
+      members = snap.docs.map(d => ({...d.data()}));
+      loaded.m = true;
+      renderTeam(); refreshDropdowns();
+    },
+    err => { console.warn('members:', err.code, err.message); }
+  );
 
-  _fbUnsub = ()=>{ u1(); u2(); u3(); };
+  const u3 = onSnapshot(
+    collection(_db, 'squads'),
+    snap => {
+      const d = snap.docs.map(d => ({...d.data()}));
+      squads = d.length ? d : defaultSquads();
+      loaded.s = true;
+      renderTeam(); refreshDropdowns();
+    },
+    err => { console.warn('squads:', err.code, err.message); }
+  );
 
-  // Wait for first data (max 7s)
-  await new Promise((resolve,reject)=>{
-    const t = setTimeout(()=>resolve(), 7000); // resolve anyway after 7s
-    const i = setInterval(()=>{ if(ready.f&&ready.m&&ready.s){ clearInterval(i); clearTimeout(t); resolve(); } },150);
+  _fbUnsub = () => { u1(); u2(); u3(); };
+
+  // Wait up to 8s for all three collections to fire their first snapshot
+  await new Promise(resolve => {
+    const timeout = setTimeout(() => resolve('timeout'), 8000);
+    const check = setInterval(() => {
+      if (loaded.f && loaded.m && loaded.s) {
+        clearInterval(check); clearTimeout(timeout); resolve('ok');
+      }
+    }, 100);
   });
 }
 
 async function tryConnect(cfg) {
   try {
-    setSyncStatus('loading','Connecting...');
     await connectFirebase(cfg);
     localStorage.setItem(FB_KEY, JSON.stringify(cfg));
-    setSyncStatus('ok','Firebase · live');
+    setSyncStatus('ok', 'Firebase · live');
     setLabel('Firebase (real-time sync)');
     return true;
   } catch(e) {
-    console.error('Firebase connect error:',e.message);
-    if (_db) { // SDK loaded, treat as partial success
-      setSyncStatus('ok','Firebase · live');
-      setLabel('Firebase (real-time sync)');
+    console.error('Firebase error:', e.message);
+    if (_db) {
+      // SDK loaded and listeners attached even if first snapshot timed out
+      // (e.g. slow connection) — still functional, just slow
       localStorage.setItem(FB_KEY, JSON.stringify(cfg));
+      setSyncStatus('ok', 'Firebase · syncing');
+      setLabel('Firebase (real-time sync)');
       return true;
     }
-    setSyncStatus('error','Firebase failed — using local');
+    // Total failure — fall back to local
+    loadLocal();
+    renderAll();
+    setSyncStatus('error', 'Firebase unreachable — local data');
+    setLabel('Local storage (Firebase failed)');
     return false;
   }
 }
@@ -634,15 +671,10 @@ async function connectFromUI() {
   el('fb-result').innerHTML='<span style="color:var(--text2)">Connecting...</span>';
   const ok = await tryConnect(cfg);
   if (ok) {
-    console.log('%c PM Hub — paste this as BAKED_CONFIG:','font-weight:bold;color:#185FA5');
-    console.log('const BAKED_CONFIG = ' + JSON.stringify(cfg, null, 2) + ';');
-    el('fb-result').innerHTML=`<span style="color:var(--green-text)">Connected!</span><br>
-      <div style="margin-top:8px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:10px;font-size:11px;font-family:monospace;color:var(--text2);white-space:pre-wrap;word-break:break-all">const BAKED_CONFIG = ${JSON.stringify(cfg,null,2)};</div>
-      <div style="font-size:11px;color:var(--text3);margin-top:6px">Copy the block above, open your HTML file, find <code>const BAKED_CONFIG = null</code> and replace it. Re-upload to Vercel. All visitors will then auto-connect.</div>`;
-    // Push any local data to Firebase
-    for (const f of features) await fbWrite('features', f.id, f);
-    for (const m of members)  await fbWrite('members',  m.id, m);
-    for (const s of squads)   await fbWrite('squads',   s.id, s);
+    el('fb-result').innerHTML=`<span style="color:var(--green-text)">Connected! All data now syncs in real time.</span>
+      <div style="margin-top:10px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:10px;font-size:11px;font-family:monospace;color:var(--text2);white-space:pre-wrap;word-break:break-all">// Your config is already baked into this file.
+// Just re-upload this same HTML file to Vercel —
+// every visitor will auto-connect to Firebase.</div>`;
     go('dashboard');
   } else {
     el('fb-result').innerHTML='<span style="color:var(--red-text)">Connection failed — check your config values and try again.</span>';
@@ -1115,17 +1147,20 @@ function esc(s){ return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replac
 function toast(msg){ const t=el('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2500); }
 
 // ── INIT ──
-loadLocal();
-renderAll(); // render immediately with local data
-
-// Get Firebase config: BAKED_CONFIG takes priority (works for all visitors), then localStorage
+// DO NOT load local data first — Firestore is the source of truth.
+// Local storage is only a write-backup. New visitors get data from Firestore.
 const fbCfg = BAKED_CONFIG || (()=>{ try{ return JSON.parse(localStorage.getItem(FB_KEY)); }catch(e){ return null; } })();
 
 if (fbCfg && fbCfg.apiKey) {
-  setSyncStatus('loading','Connecting...');
+  // Show connecting state — render empty shell while Firestore loads
+  setSyncStatus('loading', 'Loading data...');
+  el('nb-features').textContent = '...';
   tryConnect(fbCfg);
 } else {
-  setSyncStatus('ok','Local storage');
+  // No Firebase config — fall back to local only
+  loadLocal();
+  renderAll();
+  setSyncStatus('ok', 'Local storage only');
 }
 
 // ── EXPOSE TO INLINE HANDLERS ──
