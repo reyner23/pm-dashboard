@@ -6,6 +6,7 @@
 <title>PM Hub</title>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -197,6 +198,21 @@ body{font-family:var(--font);background:var(--bg3);color:var(--text);font-size:1
 
 @media(max-width:700px){.sb{display:none}.mrow{grid-template-columns:1fr 1fr}.two-col{grid-template-columns:1fr}}
 
+/* ── Auth / Login ── */
+.auth-screen{position:fixed;inset:0;background:var(--bg3);display:flex;align-items:center;justify-content:center;z-index:1000;padding:16px}
+.auth-screen.hide{display:none}
+.auth-card{background:var(--bg);border:1px solid var(--border);border-radius:var(--rl);padding:32px;width:360px;max-width:100%}
+.auth-logo{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.auth-logo-dot{width:10px;height:10px;border-radius:50%;background:var(--blue)}
+.auth-logo-text{font-size:16px;font-weight:600;color:var(--text)}
+.auth-subtitle{font-size:12px;color:var(--text3);margin-bottom:24px;padding-left:18px}
+.auth-title{font-size:14px;font-weight:600;color:var(--text);margin-bottom:16px}
+.auth-error{background:var(--red-bg);color:var(--red-text);border:1px solid var(--red);border-radius:var(--r);padding:8px 12px;font-size:12px;margin-bottom:12px;display:none}
+.auth-error.show{display:block}
+.user-badge{display:flex;align-items:center;gap:6px;padding:6px 10px;background:var(--bg2);border-radius:var(--r);border:1px solid var(--border);cursor:pointer;transition:background .15s}
+.user-badge:hover{background:var(--bg3)}
+.user-av{width:24px;height:24px;border-radius:50%;background:var(--blue-bg);color:var(--blue-text);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;flex-shrink:0}
+
 /* ── Countdown ── */
 .countdown{font-size:10px;padding:2px 7px;border-radius:8px;font-weight:600;white-space:nowrap}
 .cd-urgent{background:var(--red-bg);color:var(--red-text)}
@@ -237,6 +253,20 @@ body{font-family:var(--font);background:var(--bg3);color:var(--text);font-size:1
 </head>
 <body>
 
+<!-- Auth Screen -->
+<div class="auth-screen" id="auth-screen">
+  <div class="auth-card">
+    <div class="auth-logo"><div class="auth-logo-dot"></div><div class="auth-logo-text">PM Hub</div></div>
+    <div class="auth-subtitle">Product Command Center</div>
+    <div class="auth-title">Sign in to continue</div>
+    <div class="auth-error" id="auth-error"></div>
+    <div class="fr" style="margin-bottom:12px"><div class="flbl">Email</div><input class="fi2" id="login-email" type="email" placeholder="your@email.com" onkeydown="if(event.key==='Enter')doLogin()"></div>
+    <div class="fr" style="margin-bottom:20px"><div class="flbl">Password</div><input class="fi2" id="login-pass" type="password" placeholder="Password" onkeydown="if(event.key==='Enter')doLogin()"></div>
+    <button class="btn pri" style="width:100%;padding:9px" onclick="doLogin()" id="login-btn">Sign in</button>
+    <div style="font-size:11px;color:var(--text3);text-align:center;margin-top:14px">Contact your admin to create an account</div>
+  </div>
+</div>
+
 <!-- Loading screen -->
 <div class="loading-screen" id="loading-screen">
   <div class="loader"></div>
@@ -261,6 +291,8 @@ body{font-family:var(--font);background:var(--bg3);color:var(--text);font-size:1
   <div class="nav-sec">
     <div class="nav-lbl">Reports</div>
     <div class="nav-item" onclick="go('report')"><span class="nav-ic">▦</span>VP Report</div>
+    <div class="nav-item" onclick="go('deleted')"><span class="nav-ic">🗑</span>Deleted tasks</div>
+    <div class="nav-item" onclick="go('users')"><span class="nav-ic">👤</span>Users</div>
     <div class="nav-item" onclick="go('chat')"><span class="nav-ic">✦</span>AI Assistant <span class="nbadge ai">AI</span></div>
   </div>
   <div class="sb-foot">
@@ -283,6 +315,10 @@ body{font-family:var(--font);background:var(--bg3);color:var(--text);font-size:1
     <div style="display:flex;gap:7px;align-items:center">
       <button class="btn sm" onclick="go('chat')">✦ AI</button>
       <button class="btn pri sm" onclick="openAddFeature()">+ Add feature</button>
+      <div class="user-badge" onclick="openUserMenu()" id="user-badge" title="Account">
+        <div class="user-av" id="user-av">?</div>
+        <span id="user-name" style="font-size:12px;color:var(--text)">...</span>
+      </div>
     </div>
   </div>
 
@@ -389,6 +425,24 @@ body{font-family:var(--font);background:var(--bg3);color:var(--text);font-size:1
     </div>
   </div>
 
+  <!-- DELETED TASKS -->
+  <div class="view" id="view-deleted">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <div style="font-size:12px;color:var(--text2)">Features that have been deleted — read only</div>
+      <button class="btn sm" onclick="loadDeleted()">↻ Refresh</button>
+    </div>
+    <div class="card" style="padding:8px"><div id="deleted-list"><div class="empty">Loading...</div></div></div>
+  </div>
+
+  <!-- USERS -->
+  <div class="view" id="view-users">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <div style="font-size:12px;color:var(--text2)">Manage who can access PM Hub</div>
+      <button class="btn pri sm" onclick="openCreateUser()">+ Create user</button>
+    </div>
+    <div class="card" style="padding:8px"><div id="users-list"><div class="empty">Loading users...</div></div></div>
+  </div>
+
   <!-- CHAT -->
   <div class="view" id="view-chat">
     <div class="cwrap">
@@ -440,7 +494,7 @@ body{font-family:var(--font);background:var(--bg3);color:var(--text);font-size:1
     <div class="fr" style="grid-column:1/-1"><div class="flbl">Notes / blockers</div><textarea class="fta" id="f-notes" placeholder="Context, blockers, dependencies..."></textarea></div>
   </div>
   <div class="mfoot">
-    <div><button class="btn danger sm" id="fdel-btn" onclick="showDel('fdel')" style="display:none">Delete</button></div>
+    <div><button class="btn danger sm" id="fdel-btn" onclick="initiateDeleteFeature()" style="display:none">Delete</button></div>
     <div style="display:flex;gap:7px"><button class="btn sm" onclick="closeModal('fov')">Cancel</button><button class="btn pri sm" onclick="saveFeature()">Save</button></div>
   </div>
   <div class="delconfirm" id="fdel">
@@ -548,9 +602,51 @@ body{font-family:var(--font);background:var(--bg3);color:var(--text);font-size:1
 </div>
 </div>
 
+<!-- USER MENU MODAL -->
+<div class="overlay" id="umov" onclick="if(event.target===this)closeModal('umov')">
+<div class="modal" style="max-width:320px">
+  <div class="mtitle"><span>Account</span><button class="mclose" onclick="closeModal('umov')">×</button></div>
+  <div id="um-info" style="margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid var(--border)"></div>
+  <button class="btn danger" style="width:100%" onclick="doLogout()">Sign out</button>
+</div>
+</div>
+
+<!-- CREATE USER MODAL -->
+<div class="overlay" id="cuov" onclick="if(event.target===this)closeModal('cuov')">
+<div class="modal" style="max-width:380px">
+  <div class="mtitle"><span>Create user</span><button class="mclose" onclick="closeModal('cuov')">×</button></div>
+  <div class="fr"><div class="flbl">Display name *</div><input class="fi2" id="cu-name" placeholder="e.g. Budi Santoso"></div>
+  <div class="fr"><div class="flbl">Email *</div><input class="fi2" id="cu-email" type="email" placeholder="budi@company.com"></div>
+  <div class="fr"><div class="flbl">Password *</div><input class="fi2" id="cu-pass" type="password" placeholder="min 6 characters"></div>
+  <div class="auth-error" id="cu-error"></div>
+  <div class="mfoot">
+    <div></div>
+    <div style="display:flex;gap:7px"><button class="btn sm" onclick="closeModal('cuov')">Cancel</button><button class="btn pri sm" onclick="createUser()">Create</button></div>
+  </div>
+</div>
+</div>
+
+<!-- DELETE CONFIRM MODAL -->
+<div class="overlay" id="dcov" onclick="if(event.target===this)closeModal('dcov')">
+<div class="modal" style="max-width:380px">
+  <div class="mtitle"><span>Delete feature?</span><button class="mclose" onclick="closeModal('dcov')">×</button></div>
+  <div style="font-size:13px;color:var(--text2);margin-bottom:6px">You are about to permanently delete:</div>
+  <div id="dc-name" style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:14px;padding:10px 12px;background:var(--red-bg);border-radius:var(--r);border:1px solid var(--red)"></div>
+  <div style="font-size:12px;color:var(--text3);margin-bottom:16px">This feature will be moved to "Deleted tasks" where you can view the history. This action cannot be undone.</div>
+  <div class="mfoot">
+    <div></div>
+    <div style="display:flex;gap:7px"><button class="btn sm" onclick="closeModal('dcov')">Cancel</button><button class="btn danger sm" onclick="confirmDeleteFeature()">Yes, delete it</button></div>
+  </div>
+</div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
+// ═══════════════════════════════════════════════════════
+// PM HUB — Full JS with Auth, Sprint, Deleted tasks
+// ═══════════════════════════════════════════════════════
+
 var FB_CONFIG = {
   apiKey: "AIzaSyDaObBzbYmo0fx-tSdupc2dUqyxDphsWL0",
   authDomain: "pm-dashbord-prds.firebaseapp.com",
@@ -570,250 +666,196 @@ var SQUAD_C = {
 
 // ── State ──
 var features=[], members=[], squads=[], quarters=[];
-var editFId=null, editMId=null, editSqId=null, editQId=null;
+var editFId=null, editMId=null, editSqId=null;
+var pendingDeleteId=null;
 var chatHistory=[], currentFilter='all';
-var selectedQuarters = [];   // multi-select for dashboard + report
-var db=null;
+var selectedQuarters=[];
+var db=null, auth=null;
+var currentUser=null;   // Firebase auth user
+var currentUserProfile=null;  // Firestore profile {name, email, uid}
+var sprintWeekOffset=0, sprintFeatId=null;
 
-// Default quarters if none in Firestore yet
-function defaultQuarters() {
-  return [
-    {id:'q1-2026',name:'Q1 2026'},{id:'q2-2026',name:'Q2 2026'},
-    {id:'q3-2026',name:'Q3 2026'},{id:'q4-2026',name:'Q4 2026'},
-    {id:'q1-2027',name:'Q1 2027'}
-  ];
-}
-
-// ── Firebase init ──
+// ── Firebase Init ──
 function initDB() {
   try {
     if (!firebase.apps.length) firebase.initializeApp(FB_CONFIG);
     db = firebase.firestore();
+    auth = firebase.auth();
     return true;
   } catch(e) {
-    setLoading(false);
-    showError('Firebase failed to initialize: ' + e.message);
+    showAuthError('Firebase failed: ' + e.message);
     return false;
   }
 }
 
-function listenAll() {
-  var loaded = {f:false,m:false,s:false,q:false};
-  var timedOut = false;
-  var timeout = setTimeout(function() {
-    if (!loaded.f || !loaded.m || !loaded.s || !loaded.q) {
-      timedOut = true;
-      setLoading(false);
-      showError('Firebase connection timed out. Check your internet and refresh.');
-    }
-  }, 12000);
+// ── AUTH ──
+function doLogin() {
+  var email = g('login-email').value.trim();
+  var pass  = g('login-pass').value;
+  if (!email || !pass) { showAuthError('Enter your email and password'); return; }
+  var btn = g('login-btn');
+  btn.textContent = 'Signing in...'; btn.disabled = true;
+  hideAuthError();
+  auth.signInWithEmailAndPassword(email, pass)
+    .catch(function(e) {
+      btn.textContent = 'Sign in'; btn.disabled = false;
+      var msg = e.code === 'auth/wrong-password' || e.code === 'auth/user-not-found'
+        ? 'Incorrect email or password' : e.message;
+      showAuthError(msg);
+    });
+}
 
-  function checkReady() {
-    if (loaded.f && loaded.m && loaded.s && loaded.q && !timedOut) {
-      clearTimeout(timeout);
-      setLoading(false);
-      setSyncOk();
-      // Default selected to the most recent quarter
-      if (!selectedQuarters.length && quarters.length) {
-        selectedQuarters = [quarters[quarters.length-1].name];
-      }
-      renderAll();
-    }
+function doLogout() {
+  auth.signOut();
+  closeModal('umov');
+}
+
+function showAuthError(msg) {
+  var el = g('auth-error');
+  el.textContent = msg; el.classList.add('show');
+}
+function hideAuthError() { g('auth-error').classList.remove('show'); }
+
+function openUserMenu() {
+  if (!currentUserProfile) return;
+  var initials = (currentUserProfile.name||'?').split(' ').map(function(w){return w[0];}).join('').substring(0,2).toUpperCase();
+  g('um-info').innerHTML = '<div style="display:flex;align-items:center;gap:10px">'
+    +'<div style="width:40px;height:40px;border-radius:50%;background:var(--blue-bg);color:var(--blue-text);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600">'+initials+'</div>'
+    +'<div><div style="font-size:14px;font-weight:600;color:var(--text)">'+esc(currentUserProfile.name||'')+'</div>'
+    +'<div style="font-size:12px;color:var(--text3)">'+esc(currentUserProfile.email||'')+'</div></div></div>';
+  g('umov').classList.add('open');
+}
+
+// ── USER MANAGEMENT ──
+function openCreateUser() { 
+  g('cu-name').value=''; g('cu-email').value=''; g('cu-pass').value='';
+  g('cu-error').classList.remove('show'); g('cu-error').textContent='';
+  g('cuov').classList.add('open');
+  setTimeout(function(){g('cu-name').focus();},100);
+}
+
+function createUser() {
+  var name  = g('cu-name').value.trim();
+  var email = g('cu-email').value.trim();
+  var pass  = g('cu-pass').value;
+  if (!name||!email||!pass) { showCuError('All fields required'); return; }
+  if (pass.length < 6)      { showCuError('Password must be at least 6 characters'); return; }
+
+  // Create via Firebase Auth REST — we use a secondary app so we don't log out the admin
+  var secondaryApp;
+  try {
+    secondaryApp = firebase.initializeApp(FB_CONFIG, 'secondary-'+Date.now());
+  } catch(e) {
+    secondaryApp = firebase.apps[firebase.apps.length-1];
   }
-
-  db.collection('features').onSnapshot(function(snap) {
-    features = snap.docs.map(function(d){ return d.data(); });
-    loaded.f = true;
-    checkReady();
-    if (loaded.f&&loaded.m&&loaded.s&&loaded.q) { renderAll(); setSyncOk(); }
-  }, function(err){ showError('Features: '+err.message); });
-
-  db.collection('members').onSnapshot(function(snap) {
-    members = snap.docs.map(function(d){ return d.data(); });
-    loaded.m = true;
-    checkReady();
-    if (loaded.f&&loaded.m&&loaded.s&&loaded.q) { renderTeam(); refreshDropdowns(); }
-  }, function(err){ showError('Members: '+err.message); });
-
-  db.collection('squads').onSnapshot(function(snap) {
-    var d = snap.docs.map(function(d){ return d.data(); });
-    squads = d.length ? d : defaultSquads();
-    loaded.s = true;
-    checkReady();
-    if (loaded.f&&loaded.m&&loaded.s&&loaded.q) { renderTeam(); refreshDropdowns(); }
-  }, function(err){ showError('Squads: '+err.message); });
-
-  db.collection('quarters').onSnapshot(function(snap) {
-    var d = snap.docs.map(function(d){ return d.data(); });
-    quarters = d.length ? d : defaultQuarters();
-    // If Firestore has no quarters yet, seed them
-    if (!snap.docs.length) {
-      defaultQuarters().forEach(function(q){
-        db.collection('quarters').doc(q.id).set(q);
+  secondaryApp.auth().createUserWithEmailAndPassword(email, pass)
+    .then(function(cred) {
+      // Save profile to Firestore
+      return db.collection('users').doc(cred.user.uid).set({
+        uid:   cred.user.uid,
+        name:  name,
+        email: email,
+        createdAt: Date.now(),
+        createdBy: currentUserProfile ? currentUserProfile.name : 'Admin'
+      }).then(function() {
+        return secondaryApp.auth().signOut();
       });
-    }
-    loaded.q = true;
-    checkReady();
-    if (loaded.f&&loaded.m&&loaded.s&&loaded.q) {
-      refreshQuarterSelectors();
-      refreshFeatureQuarterDropdown();
-    }
-  }, function(err){ showError('Quarters: '+err.message); });
+    })
+    .then(function() {
+      closeModal('cuov');
+      toast('User "'+name+'" created ✓');
+      loadUsers();
+    })
+    .catch(function(e) {
+      showCuError(e.code === 'auth/email-already-in-use' ? 'Email already in use' : e.message);
+    });
 }
 
-function defaultSquads() {
-  return [{id:'sq-dev',name:'Dev',color:'blue'},{id:'sq-uiux',name:'UI/UX',color:'purple'},{id:'sq-pm',name:'Product',color:'amber'}];
+function showCuError(msg) { var e=g('cu-error'); e.textContent=msg; e.classList.add('show'); }
+
+function loadUsers() {
+  db.collection('users').get().then(function(snap) {
+    var users = snap.docs.map(function(d){ return d.data(); });
+    var el = g('users-list');
+    if (!users.length) { el.innerHTML='<div class="empty">No users yet.</div>'; return; }
+    el.innerHTML = users.map(function(u) {
+      var init = (u.name||'?').split(' ').map(function(w){return w[0];}).join('').substring(0,2).toUpperCase();
+      return '<div class="fi" style="cursor:default">'
+        +'<div style="width:32px;height:32px;border-radius:50%;background:var(--blue-bg);color:var(--blue-text);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;flex-shrink:0">'+init+'</div>'
+        +'<div class="fi-info">'
+        +'<div class="fi-name">'+esc(u.name||'')+'</div>'
+        +'<div class="fi-meta">'+esc(u.email||'')+(u.createdBy?' · Created by '+esc(u.createdBy):'')+'</div>'
+        +'</div>'
+        +'<span class="badge b-done" style="font-size:9px">Active</span>'
+        +'</div>';
+    }).join('');
+  }).catch(function(e){ g('users-list').innerHTML='<div style="color:var(--red-text);font-size:13px">'+e.message+'</div>'; });
 }
 
-// ── Firestore write ──
+// ── DELETED TASKS ──
+function loadDeleted() {
+  var el = g('deleted-list');
+  el.innerHTML = '<div class="empty">Loading...</div>';
+  db.collection('deleted').orderBy('deletedAt','desc').get()
+    .then(function(snap) {
+      if (!snap.docs.length) { el.innerHTML='<div class="empty">No deleted tasks yet.</div>'; return; }
+      el.innerHTML = snap.docs.map(function(d) {
+        var f = d.data();
+        var dt = new Date(f.deletedAt).toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit'});
+        return '<div style="padding:12px 10px;border-bottom:1px solid var(--border)">'
+          +'<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px">'
+          +'<div style="flex:1">'
+          +'<div style="font-size:13px;font-weight:500;color:var(--text);margin-bottom:4px">'+esc(f.name||'')+'</div>'
+          +'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:4px">'
+          +(f.quarter?'<span class="badge b-planned" style="font-size:9px">'+esc(f.quarter)+'</span>':'')
+          +(f.squad?'<span class="badge" style="background:var(--bg3);color:var(--text2);font-size:9px">'+esc(f.squad)+'</span>':'')
+          +(f.status?'<span class="badge b-'+f.status+'" style="font-size:9px">'+(LABELS[f.status]||f.status)+'</span>':'')
+          +'</div>'
+          +'<div style="font-size:11px;color:var(--text3)">'
+          +'<span style="color:var(--red-text);font-weight:500">Deleted by '+esc(f.deletedBy||'unknown')+'</span>'
+          +' · '+dt
+          +(f.notes?' · Note: '+esc(f.notes.substring(0,60)):'')
+          +'</div>'
+          +'</div>'
+          +'</div>'
+          // Show edit history if any
+          +(f.history&&f.history.length
+            ?'<details style="margin-top:8px"><summary style="font-size:11px;color:var(--text3);cursor:pointer">Edit history ('+f.history.length+')</summary>'
+            +'<div style="margin-top:6px;padding-left:10px;border-left:2px solid var(--border)">'+f.history.slice().reverse().map(function(h){
+              var hdt=new Date(h.at).toLocaleString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+              return '<div style="font-size:11px;color:var(--text3);margin-bottom:4px"><strong>'+esc(h.by||'?')+'</strong> · '+hdt+'<br>'+h.changes.map(function(c){return esc(c);}).join(', ')+'</div>';
+            }).join('')+'</div></details>':'')
+          +'</div>';
+      }).join('');
+    })
+    .catch(function(e){ el.innerHTML='<div style="color:var(--red-text);font-size:13px">'+e.message+'</div>'; });
+}
+
+// ── Firebase helpers ──
 function fbSet(col, id, data, onOk, onErr) {
   showSaveBar('saving');
   db.collection(col).doc(id).set(data)
     .then(function(){ showSaveBar('saved'); if(onOk) onOk(); })
     .catch(function(e){ showSaveBar('err'); toast('Save failed: '+e.message); if(onErr) onErr(e); });
 }
+
 function fbDel(col, id) {
-  db.collection(col).doc(id).delete()
-    .then(function(){ toast('Deleted'); })
-    .catch(function(e){ toast('Delete failed: '+e.message); });
+  db.collection(col).doc(id).delete().catch(function(e){ toast('Delete failed: '+e.message); });
 }
 
-// ── Quarter selection helpers ──
-function getSelectedFeatures() {
-  if (!selectedQuarters.length) return features;
-  var selected = features.filter(function(f){ return selectedQuarters.indexOf(f.quarter) >= 0; });
-  return selected.length ? selected : features;
-}
-
-function toggleQuarter(name) {
-  var idx = selectedQuarters.indexOf(name);
-  if (idx >= 0) {
-    if (selectedQuarters.length === 1) return; // keep at least one
-    selectedQuarters.splice(idx,1);
-  } else {
-    selectedQuarters.push(name);
-  }
-  refreshQuarterSelectors();
-  renderAll();
-}
-
-function refreshQuarterSelectors() {
-  var els = [g('q-selector'), g('q-selector-rpt')];
-  els.forEach(function(el) {
-    if (!el) return;
-    var pills = quarters.map(function(q) {
-      var active = selectedQuarters.indexOf(q.name) >= 0;
-      var cls = active ? 'qpill active' : 'qpill';
-      return '<span class="' + cls + '" data-qn="' + esc(q.name) + '" onclick="toggleQuarter(this.dataset.qn)">' + esc(q.name) + '</span>';
-    }).join('');
-    pills += '<span class="qpill add" onclick="openManageQuarters()">+ quarter</span>';
-    el.innerHTML = pills;
-  });
-}
-
-function refreshFeatureQuarterDropdown() {
-  var sel = g('f-quarter');
-  if (!sel) return;
-  var cur = sel.value;
-  sel.innerHTML = quarters.map(function(q){
-    return '<option value="'+esc(q.name)+'">'+esc(q.name)+'</option>';
-  }).join('');
-  if (cur) sel.value = cur;
-}
-
-// ── Quarter CRUD ──
-function uid() { return Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
-
-function openManageQuarters() {
-  renderQuarterList();
-  g('q-new-name').value = '';
-  g('qov').classList.add('open');
-  setTimeout(function(){ g('q-new-name').focus(); }, 100);
-}
-
-function renderQuarterList() {
-  var el = g('q-list-modal');
-  if (!quarters.length) { el.innerHTML = '<div style="color:var(--text3);font-size:13px">No quarters yet.</div>'; return; }
-  el.innerHTML = quarters.map(function(q) {
-    return '<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border)">'
-      +'<span style="flex:1;font-size:13px;font-weight:500;color:var(--text)">'+esc(q.name)+'</span>'
-      +'<button class="btn sm" data-qid="'+q.id+'" data-qname="'+esc(q.name)+'" onclick="startEditQuarter(this.dataset.qid,this.dataset.qname)" style="font-size:10px;padding:2px 7px">Edit</button>'
-      +'<button class="btn danger sm" data-qid="'+q.id+'" onclick="deleteQuarter(this.dataset.qid)" style="font-size:10px;padding:2px 7px">×</button>'
-      +'</div>';
-  }).join('');
-}
-
-function addQuarter() {
-  var name = g('q-new-name').value.trim();
-  if (!name) return;
-  var exists = quarters.filter(function(q){ return q.name===name; }).length;
-  if (exists) { toast('Quarter "'+name+'" already exists'); return; }
-  var q = {id: 'q-'+uid(), name: name};
-  g('q-new-name').value = '';
-  fbSet('quarters', q.id, q, function(){
-    toast('Quarter "'+name+'" added');
-    renderQuarterList();
-  });
-}
-
-function startEditQuarter(id, name) {
-  var newName = prompt('Rename quarter:', name);
-  if (!newName || newName.trim() === name) return;
-  newName = newName.trim();
-  // Update quarter doc
-  var q = quarters.filter(function(x){ return x.id===id; })[0];
-  if (!q) return;
-  var updated = {id: q.id, name: newName};
-  fbSet('quarters', q.id, updated, function(){
-    // Update all features that reference the old name
-    var toUpdate = features.filter(function(f){ return f.quarter===name; });
-    toUpdate.forEach(function(f){
-      var upd = Object.assign({}, f, {quarter: newName});
-      db.collection('features').doc(f.id).set(upd);
-    });
-    // Update selectedQuarters
-    var si = selectedQuarters.indexOf(name);
-    if (si >= 0) selectedQuarters[si] = newName;
-    toast('Quarter renamed · '+toUpdate.length+' features updated');
-    renderQuarterList();
-  });
-}
-
-function deleteQuarter(id) {
-  var q = quarters.filter(function(x){ return x.id===id; })[0];
-  if (!q) return;
-  var inUse = features.filter(function(f){ return f.quarter===q.name; }).length;
-  if (inUse > 0) {
-    toast(inUse+' features use this quarter — reassign them first');
-    return;
-  }
-  fbDel('quarters', id);
-  var si = selectedQuarters.indexOf(q.name);
-  if (si >= 0) selectedQuarters.splice(si,1);
-  renderQuarterList();
-}
-
-// ── Countdown helper ──
-function countdownHTML(dueRaw) {
-  if (!dueRaw) return '';
-  try {
-    var due = new Date(dueRaw + 'T00:00:00');
-    var today = new Date(); today.setHours(0,0,0,0);
-    var diff = Math.round((due - today) / 86400000);
-    if (diff < 0)  return '<span class="countdown cd-past">'+Math.abs(diff)+'d overdue</span>';
-    if (diff === 0) return '<span class="countdown cd-urgent">Due today</span>';
-    if (diff <= 3)  return '<span class="countdown cd-urgent">'+diff+'d left</span>';
-    if (diff <= 14) return '<span class="countdown cd-soon">'+diff+'d left</span>';
-    return '<span class="countdown cd-ok">'+diff+'d left</span>';
-  } catch(e) { return ''; }
+function currentUserName() {
+  return currentUserProfile ? (currentUserProfile.name || currentUserProfile.email || 'Unknown') : 'Unknown';
 }
 
 // ── CRUD: Features ──
+function uid() { return Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
+
 function saveFeature() {
   var name = g('f-name').value.trim();
   if (!name) { toast('Feature name is required'); return; }
   var rawDue = g('f-due').value;
   var now = Date.now();
+  var userName = currentUserName();
 
   var existing = features.filter(function(x){ return x.id===editFId; })[0];
   var history = existing ? (existing.history||[]) : [];
@@ -822,13 +864,13 @@ function saveFeature() {
     var chk={name:'Name',status:'Status',priority:'Priority',notes:'Notes'};
     Object.keys(chk).forEach(function(key){
       var ov=existing[key]||'', nv=g('f-'+key)?g('f-'+key).value.trim():'';
-      if(ov!==nv) changes.push(chk[key]+': "'+ov+'" → "'+nv+'"');
+      if(ov!==nv) changes.push(chk[key]+': "'+ov+'" \u2192 "'+nv+'"');
     });
-    var os=existing.squad||'',ns=g('f-squad').value; if(os!==ns) changes.push('Squad: "'+os+'" → "'+ns+'"');
-    var oo=existing.owner||'',no=g('f-owner').value; if(oo!==no) changes.push('Owner: "'+oo+'" → "'+no+'"');
-    var od=existing.due||'',nd=rawDue?fmtDate(rawDue):''; if(od!==nd) changes.push('Due: "'+od+'" → "'+nd+'"');
-    var oq=existing.quarter||'',nq=g('f-quarter').value; if(oq!==nq) changes.push('Quarter: "'+oq+'" → "'+nq+'"');
-    if(changes.length) history.push({at:now,by:'PM',changes:changes});
+    var os=existing.squad||'',ns=g('f-squad').value; if(os!==ns) changes.push('Squad: "'+os+'" \u2192 "'+ns+'"');
+    var oo=existing.owner||'',no=g('f-owner').value; if(oo!==no) changes.push('Owner: "'+oo+'" \u2192 "'+no+'"');
+    var od=existing.due||'',nd=rawDue?fmtDate(rawDue):''; if(od!==nd) changes.push('Due: "'+od+'" \u2192 "'+nd+'"');
+    var oq=existing.quarter||'',nq=g('f-quarter').value; if(oq!==nq) changes.push('Quarter: "'+oq+'" \u2192 "'+nq+'"');
+    if(changes.length) history.push({at:now, by:userName, changes:changes});
   }
 
   var f = {
@@ -839,187 +881,343 @@ function saveFeature() {
     status:    g('f-status').value,
     priority:  g('f-priority').value,
     quarter:   g('f-quarter').value,
-    due:       rawDue ? fmtDate(rawDue) : '',
+    due:       rawDue?fmtDate(rawDue):'',
     dueRaw:    rawDue,
     figma:     g('f-figma').value.trim(),
     notes:     g('f-notes').value.trim(),
     updatedAt: now,
+    updatedBy: userName,
     history:   history
   };
-  if (!editFId) { f.createdAt=now; f.history=[]; }
+  if (!editFId) {
+    f.createdAt = now;
+    f.createdBy = userName;
+    f.history = [];
+  } else {
+    // Preserve sprint assignment — never wipe it on edit
+    var prev = features.filter(function(x){return x.id===editFId;})[0];
+    if (prev) {
+      if (prev.sprintWeek)     f.sprintWeek     = prev.sprintWeek;
+      if (prev.sprintAssignee) f.sprintAssignee = prev.sprintAssignee;
+      if (prev.sprintNote)     f.sprintNote     = prev.sprintNote;
+    }
+  }
+
   closeModal('fov');
-  fbSet('features', f.id, f, function(){ toast((editFId?'Feature updated':'Feature added')+' ✓'); });
+  fbSet('features', f.id, f, function(){
+    toast((editFId?'Feature updated':'Feature added')+' \u2713');
+  });
 }
 
-function deleteFeature() {
+// Show confirm modal before deleting
+function initiateDeleteFeature() {
   if (!editFId) return;
-  var id = editFId;
+  var f = features.filter(function(x){return x.id===editFId;})[0];
+  if (!f) return;
+  pendingDeleteId = editFId;
+  g('dc-name').textContent = f.name;
   closeModal('fov');
-  fbDel('features', id);
+  g('dcov').classList.add('open');
+}
+
+function confirmDeleteFeature() {
+  if (!pendingDeleteId) return;
+  var f = features.filter(function(x){return x.id===pendingDeleteId;})[0];
+  if (!f) { closeModal('dcov'); return; }
+
+  // Archive to deleted collection with who deleted it
+  var archived = Object.assign({}, f, {
+    deletedAt: Date.now(),
+    deletedBy: currentUserName()
+  });
+  db.collection('deleted').doc(f.id).set(archived)
+    .then(function(){
+      return db.collection('features').doc(f.id).delete();
+    })
+    .then(function(){
+      closeModal('dcov');
+      pendingDeleteId = null;
+      toast('Feature deleted and archived');
+    })
+    .catch(function(e){ toast('Delete failed: '+e.message); });
 }
 
 function fmtDate(iso) {
   if (!iso) return '';
   try { return new Date(iso+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'}); }
-  catch(e) { return iso; }
+  catch(e){ return iso; }
 }
 
 // ── CRUD: Members ──
 function saveMember() {
-  var name = g('m-name').value.trim();
-  if (!name) { toast('Name is required'); return; }
+  var name=g('m-name').value.trim();
+  if(!name){toast('Name is required');return;}
   var m={id:editMId||uid(),name:name,role:g('m-role').value.trim(),squad:g('m-squad').value,email:g('m-email').value.trim()};
   closeModal('mov');
-  fbSet('members',m.id,m,function(){ toast((editMId?'Member updated':'Member added')+' ✓'); });
+  fbSet('members',m.id,m,function(){toast((editMId?'Member updated':'Member added')+' \u2713');});
 }
-function deleteMember() {
-  if (!editMId) return;
+function deleteMember(){
+  if(!editMId)return;
   var id=editMId; closeModal('mov'); fbDel('members',id);
 }
 
 // ── CRUD: Squads ──
-function saveSquad() {
-  var name = g('sq-name').value.trim();
-  if (!name) { toast('Squad name is required'); return; }
+function saveSquad(){
+  var name=g('sq-name').value.trim();
+  if(!name){toast('Squad name is required');return;}
   var s={id:editSqId||('sq-'+uid()),name:name,color:g('sq-color').value};
   closeModal('sov');
-  fbSet('squads',s.id,s,function(){ toast((editSqId?'Squad updated':'Squad added')+' ✓'); });
+  fbSet('squads',s.id,s,function(){toast((editSqId?'Squad updated':'Squad added')+' \u2713');});
 }
-function deleteSquad() {
-  if (!editSqId) return;
+function deleteSquad(){
+  if(!editSqId)return;
   var id=editSqId; closeModal('sov'); fbDel('squads',id);
 }
 
-// ── Modals: Features ──
-function openAddFeature() {
-  editFId=null;
-  g('ftitle').textContent='Add feature';
-  g('fdel-btn').style.display='none'; hideDel('fdel');
-  g('f-name').value=''; g('f-figma').value=''; g('f-notes').value=''; g('f-due').value='';
-  g('f-status').value='planned'; g('f-priority').value='Medium';
-  g('fhint').textContent=''; g('f-history').innerHTML='';
-  refreshFeatureQuarterDropdown();
-  // Default quarter to first selected
-  if (selectedQuarters.length) g('f-quarter').value = selectedQuarters[0];
-  refreshDropdowns(); g('f-squad').value=''; g('f-owner').value='';
-  g('fov').classList.add('open');
-  setTimeout(function(){ g('f-name').focus(); },100);
+// ── CRUD: Quarters ──
+function openManageQuarters(){
+  renderQuarterList();
+  g('q-new-name').value='';
+  g('qov').classList.add('open');
+  setTimeout(function(){g('q-new-name').focus();},100);
+}
+function renderQuarterList(){
+  var el=g('q-list-modal');
+  if(!quarters.length){el.innerHTML='<div style="color:var(--text3);font-size:13px">No quarters yet.</div>';return;}
+  el.innerHTML=quarters.map(function(q){
+    return '<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border)">'
+      +'<span style="flex:1;font-size:13px;font-weight:500;color:var(--text)">'+esc(q.name)+'</span>'
+      +'<button class="btn sm" data-qid="'+q.id+'" data-qname="'+esc(q.name)+'" onclick="startEditQuarter(this.dataset.qid,this.dataset.qname)" style="font-size:10px;padding:2px 7px">Edit</button>'
+      +'<button class="btn danger sm" data-qid="'+q.id+'" onclick="deleteQuarter(this.dataset.qid)" style="font-size:10px;padding:2px 7px">\u00d7</button>'
+      +'</div>';
+  }).join('');
+}
+function addQuarter(){
+  var name=g('q-new-name').value.trim();
+  if(!name)return;
+  if(quarters.filter(function(q){return q.name===name;}).length){toast('Quarter "'+name+'" already exists');return;}
+  var q={id:'q-'+uid(),name:name};
+  g('q-new-name').value='';
+  fbSet('quarters',q.id,q,function(){toast('Quarter "'+name+'" added');renderQuarterList();});
+}
+function startEditQuarter(id,name){
+  var n=prompt('Rename quarter:',name);
+  if(!n||n.trim()===name)return;
+  n=n.trim();
+  var q=quarters.filter(function(x){return x.id===id;})[0]; if(!q)return;
+  fbSet('quarters',q.id,{id:q.id,name:n},function(){
+    var toUpd=features.filter(function(f){return f.quarter===name;});
+    toUpd.forEach(function(f){ db.collection('features').doc(f.id).set(Object.assign({},f,{quarter:n})); });
+    var si=selectedQuarters.indexOf(name); if(si>=0) selectedQuarters[si]=n;
+    toast('Quarter renamed \u00b7 '+toUpd.length+' features updated');
+    renderQuarterList();
+  });
+}
+function deleteQuarter(id){
+  var q=quarters.filter(function(x){return x.id===id;})[0]; if(!q)return;
+  var inUse=features.filter(function(f){return f.quarter===q.name;}).length;
+  if(inUse>0){toast(inUse+' features use this quarter \u2014 reassign them first');return;}
+  fbDel('quarters',id);
+  var si=selectedQuarters.indexOf(q.name); if(si>=0) selectedQuarters.splice(si,1);
+  renderQuarterList();
 }
 
-function openEditFeature(id) {
-  var f=features.filter(function(x){return x.id===id;})[0]; if(!f) return;
-  editFId=id;
-  g('ftitle').textContent='Edit feature';
-  g('fdel-btn').style.display='block'; hideDel('fdel');
-  g('f-name').value=f.name||''; g('f-status').value=f.status||'planned';
-  g('f-priority').value=f.priority||'Medium';
-  g('f-due').value=f.dueRaw||''; g('f-figma').value=f.figma||''; g('f-notes').value=f.notes||'';
-  previewFigma();
-  refreshFeatureQuarterDropdown();
-  g('f-quarter').value=f.quarter||'';
-  refreshDropdowns(); g('f-squad').value=f.squad||''; g('f-owner').value=f.owner||'';
+// ── Firestore listeners ──
+function listenAll(){
+  var loaded={f:false,m:false,s:false,q:false};
+  var timedOut=false;
+  var timeout=setTimeout(function(){
+    if(!loaded.f||!loaded.m||!loaded.s||!loaded.q){timedOut=true;setLoading(false);showError('Firebase timed out. Check connection and refresh.');}
+  },12000);
+  function checkReady(){
+    if(loaded.f&&loaded.m&&loaded.s&&loaded.q&&!timedOut){
+      clearTimeout(timeout); setLoading(false); setSyncOk();
+      if(!selectedQuarters.length&&quarters.length) selectedQuarters=[quarters[quarters.length-1].name];
+      renderAll();
+    }
+  }
+  db.collection('features').onSnapshot(function(snap){
+    features=snap.docs.map(function(d){return d.data();}); loaded.f=true; checkReady();
+    if(loaded.f&&loaded.m&&loaded.s&&loaded.q){renderAll();setSyncOk();}
+  },function(e){showError('Features: '+e.message);});
+  db.collection('members').onSnapshot(function(snap){
+    members=snap.docs.map(function(d){return d.data();}); loaded.m=true; checkReady();
+    if(loaded.f&&loaded.m&&loaded.s&&loaded.q){renderTeam();refreshDropdowns();}
+  },function(e){showError('Members: '+e.message);});
+  db.collection('squads').onSnapshot(function(snap){
+    var d=snap.docs.map(function(d){return d.data();}); squads=d.length?d:defaultSquads(); loaded.s=true; checkReady();
+    if(loaded.f&&loaded.m&&loaded.s&&loaded.q){renderTeam();refreshDropdowns();}
+  },function(e){showError('Squads: '+e.message);});
+  db.collection('quarters').onSnapshot(function(snap){
+    var d=snap.docs.map(function(d){return d.data();}); quarters=d.length?d:defaultQuarters();
+    if(!snap.docs.length) defaultQuarters().forEach(function(q){db.collection('quarters').doc(q.id).set(q);});
+    loaded.q=true; checkReady();
+    if(loaded.f&&loaded.m&&loaded.s&&loaded.q){refreshQuarterSelectors();refreshFeatureQuarterDropdown();}
+  },function(e){showError('Quarters: '+e.message);});
+}
 
-  var hist=f.history||[], hEl=g('f-history');
-  if (hist.length) {
+function defaultSquads(){return [{id:'sq-dev',name:'Dev',color:'blue'},{id:'sq-uiux',name:'UI/UX',color:'purple'},{id:'sq-pm',name:'Product',color:'amber'}];}
+function defaultQuarters(){return [{id:'q1-2026',name:'Q1 2026'},{id:'q2-2026',name:'Q2 2026'},{id:'q3-2026',name:'Q3 2026'},{id:'q4-2026',name:'Q4 2026'},{id:'q1-2027',name:'Q1 2027'}];}
+
+// ── Quarter selection ──
+function getSelectedFeatures(){
+  if(!selectedQuarters.length)return features;
+  var sel=features.filter(function(f){return selectedQuarters.indexOf(f.quarter)>=0;});
+  return sel.length?sel:features;
+}
+function toggleQuarter(name){
+  var idx=selectedQuarters.indexOf(name);
+  if(idx>=0){if(selectedQuarters.length===1)return; selectedQuarters.splice(idx,1);}
+  else selectedQuarters.push(name);
+  refreshQuarterSelectors(); renderAll();
+}
+function refreshQuarterSelectors(){
+  var els=[g('q-selector'),g('q-selector-rpt')];
+  els.forEach(function(el){
+    if(!el)return;
+    var pills=quarters.map(function(q){
+      var active=selectedQuarters.indexOf(q.name)>=0;
+      return '<span class="'+(active?'qpill active':'qpill')+'" data-qn="'+esc(q.name)+'" onclick="toggleQuarter(this.dataset.qn)">'+esc(q.name)+'</span>';
+    }).join('');
+    pills+='<span class="qpill add" onclick="openManageQuarters()">+ quarter</span>';
+    el.innerHTML=pills;
+  });
+}
+function refreshFeatureQuarterDropdown(){
+  var sel=g('f-quarter'); if(!sel)return;
+  var cur=sel.value;
+  sel.innerHTML=quarters.map(function(q){return '<option value="'+esc(q.name)+'">'+esc(q.name)+'</option>';}).join('');
+  if(cur)sel.value=cur;
+}
+
+// ── Countdown ──
+function countdownHTML(dueRaw){
+  if(!dueRaw)return '';
+  try{
+    var due=new Date(dueRaw+'T00:00:00');
+    var today=new Date();today.setHours(0,0,0,0);
+    var diff=Math.round((due-today)/86400000);
+    if(diff<0)  return '<span class="countdown cd-past">'+Math.abs(diff)+'d overdue</span>';
+    if(diff===0)return '<span class="countdown cd-urgent">Due today</span>';
+    if(diff<=3) return '<span class="countdown cd-urgent">'+diff+'d left</span>';
+    if(diff<=14)return '<span class="countdown cd-soon">'+diff+'d left</span>';
+    return '<span class="countdown cd-ok">'+diff+'d left</span>';
+  }catch(e){return '';}
+}
+
+// ── Modals ──
+function openAddFeature(){
+  editFId=null; g('ftitle').textContent='Add feature';
+  g('fdel-btn').style.display='none'; hideDel('fdel');
+  g('f-name').value='';g('f-figma').value='';g('f-notes').value='';g('f-due').value='';
+  g('f-status').value='planned';g('f-priority').value='Medium';
+  g('fhint').textContent='';g('f-history').innerHTML='';
+  refreshFeatureQuarterDropdown();
+  if(selectedQuarters.length)g('f-quarter').value=selectedQuarters[0];
+  refreshDropdowns();g('f-squad').value='';g('f-owner').value='';
+  g('fov').classList.add('open');
+  setTimeout(function(){g('f-name').focus();},100);
+}
+function openEditFeature(id){
+  var f=features.filter(function(x){return x.id===id;})[0];if(!f)return;
+  editFId=id;g('ftitle').textContent='Edit feature';
+  g('fdel-btn').style.display='block';hideDel('fdel');
+  g('f-name').value=f.name||'';g('f-status').value=f.status||'planned';
+  g('f-priority').value=f.priority||'Medium';g('f-due').value=f.dueRaw||'';
+  g('f-figma').value=f.figma||'';g('f-notes').value=f.notes||'';
+  previewFigma();refreshFeatureQuarterDropdown();g('f-quarter').value=f.quarter||'';
+  refreshDropdowns();g('f-squad').value=f.squad||'';g('f-owner').value=f.owner||'';
+  var hist=f.history||[],hEl=g('f-history');
+  if(hist.length){
     var rows=hist.slice().reverse().map(function(h){
       var dt=new Date(h.at).toLocaleString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
       return '<div style="font-size:11px;background:var(--bg2);border-radius:6px;padding:7px 9px;border:1px solid var(--border);margin-bottom:5px">'
-        +'<div style="color:var(--text3);margin-bottom:3px">'+dt+' · '+(h.by||'PM')+'</div>'
-        +'<div style="color:var(--text2);line-height:1.6">'+h.changes.map(function(c){return '· '+esc(c);}).join('<br>')+'</div></div>';
+        +'<div style="color:var(--text3);margin-bottom:3px">'+dt+' \u00b7 <strong>'+esc(h.by||'?')+'</strong></div>'
+        +'<div style="color:var(--text2);line-height:1.6">'+h.changes.map(function(c){return '\u00b7 '+esc(c);}).join('<br>')+'</div></div>';
     }).join('');
     hEl.innerHTML='<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">'
       +'<div style="font-size:11px;font-weight:600;color:var(--text2);margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em">Edit history</div>'
       +'<div style="max-height:150px;overflow-y:auto">'+rows+'</div></div>';
-  } else { hEl.innerHTML=''; }
+  }else{hEl.innerHTML='';}
   g('fov').classList.add('open');
 }
-
-// ── Modals: Members ──
-function openAddMember(squadName) {
-  editMId=null; g('mtitle').textContent='Add member';
-  g('mdel-btn').style.display='none'; hideDel('mdel');
-  g('m-name').value=''; g('m-role').value=''; g('m-email').value='';
-  refreshSquadSel(); if(squadName) g('m-squad').value=squadName;
-  g('mov').classList.add('open'); setTimeout(function(){g('m-name').focus();},100);
+function openAddMember(squadName){
+  editMId=null;g('mtitle').textContent='Add member';
+  g('mdel-btn').style.display='none';hideDel('mdel');
+  g('m-name').value='';g('m-role').value='';g('m-email').value='';
+  refreshSquadSel();if(squadName)g('m-squad').value=squadName;
+  g('mov').classList.add('open');setTimeout(function(){g('m-name').focus();},100);
 }
-function openEditMember(id) {
-  var m=members.filter(function(x){return x.id===id;})[0]; if(!m) return;
-  editMId=id; g('mtitle').textContent='Edit member';
-  g('mdel-btn').style.display='block'; hideDel('mdel');
-  g('m-name').value=m.name||''; g('m-role').value=m.role||''; g('m-email').value=m.email||'';
-  refreshSquadSel(); g('m-squad').value=m.squad||'';
+function openEditMember(id){
+  var m=members.filter(function(x){return x.id===id;})[0];if(!m)return;
+  editMId=id;g('mtitle').textContent='Edit member';
+  g('mdel-btn').style.display='block';hideDel('mdel');
+  g('m-name').value=m.name||'';g('m-role').value=m.role||'';g('m-email').value=m.email||'';
+  refreshSquadSel();g('m-squad').value=m.squad||'';
   g('mov').classList.add('open');
 }
-
-// ── Modals: Squads ──
-function openAddSquad() {
-  editSqId=null; g('sqtitle').textContent='Add squad';
-  g('sqdel-btn').style.display='none'; hideDel('sqdel');
-  g('sq-name').value=''; g('sq-color').value='blue';
-  g('sov').classList.add('open'); setTimeout(function(){g('sq-name').focus();},100);
+function openAddSquad(){
+  editSqId=null;g('sqtitle').textContent='Add squad';
+  g('sqdel-btn').style.display='none';hideDel('sqdel');
+  g('sq-name').value='';g('sq-color').value='blue';
+  g('sov').classList.add('open');setTimeout(function(){g('sq-name').focus();},100);
 }
-function openEditSquad(id) {
-  var s=squads.filter(function(x){return x.id===id;})[0]; if(!s) return;
-  editSqId=id; g('sqtitle').textContent='Edit squad';
-  g('sqdel-btn').style.display='block'; hideDel('sqdel');
-  g('sq-name').value=s.name||''; g('sq-color').value=s.color||'blue';
+function openEditSquad(id){
+  var s=squads.filter(function(x){return x.id===id;})[0];if(!s)return;
+  editSqId=id;g('sqtitle').textContent='Edit squad';
+  g('sqdel-btn').style.display='block';hideDel('sqdel');
+  g('sq-name').value=s.name||'';g('sq-color').value=s.color||'blue';
   g('sov').classList.add('open');
 }
-
-function closeModal(id){ g(id).classList.remove('open'); }
-function showDel(id){ g(id).classList.add('show'); }
-function hideDel(id){ g(id).classList.remove('show'); }
-
-function previewFigma() {
-  var url=g('f-figma').value.trim(), hint=g('fhint');
-  if(url.indexOf('figma.com')>=0) hint.innerHTML='<a href="'+url+'" target="_blank" style="color:var(--purple)">Preview ↗</a>';
-  else if(url) hint.textContent='URL saved as-is'; else hint.textContent='';
+function closeModal(id){g(id).classList.remove('open');}
+function showDel(id){g(id).classList.add('show');}
+function hideDel(id){g(id).classList.remove('show');}
+function previewFigma(){
+  var url=g('f-figma').value.trim(),hint=g('fhint');
+  if(url.indexOf('figma.com')>=0)hint.innerHTML='<a href="'+url+'" target="_blank" style="color:var(--purple)">Preview \u2197</a>';
+  else if(url)hint.textContent='URL saved as-is';else hint.textContent='';
 }
-function refreshSquadSel() {
-  g('m-squad').innerHTML='<option value="">— select —</option>'+
-    squads.map(function(s){return '<option value="'+esc(s.name)+'">'+esc(s.name)+'</option>';}).join('');
+function refreshSquadSel(){
+  g('m-squad').innerHTML='<option value="">\u2014 select \u2014</option>'+squads.map(function(s){return '<option value="'+esc(s.name)+'">'+esc(s.name)+'</option>';}).join('');
 }
-function refreshDropdowns() {
+function refreshDropdowns(){
   var sq=g('f-squad');
-  if(sq){var c=sq.value;sq.innerHTML='<option value="">— select squad —</option>'+squads.map(function(s){return '<option value="'+esc(s.name)+'">'+esc(s.name)+'</option>';}).join('');if(c)sq.value=c;}
+  if(sq){var c=sq.value;sq.innerHTML='<option value="">\u2014 select squad \u2014</option>'+squads.map(function(s){return '<option value="'+esc(s.name)+'">'+esc(s.name)+'</option>';}).join('');if(c)sq.value=c;}
   var ow=g('f-owner');
-  if(ow){var c2=ow.value;ow.innerHTML='<option value="">— select member —</option>'+members.map(function(m){return '<option value="'+esc(m.name)+'">'+esc(m.name)+' ('+esc(m.squad||'')+')</option>';}).join('');if(c2)ow.value=c2;}
+  if(ow){var c2=ow.value;ow.innerHTML='<option value="">\u2014 select member \u2014</option>'+members.map(function(m){return '<option value="'+esc(m.name)+'">'+esc(m.name)+' ('+esc(m.squad||'')+')</option>';}).join('');if(c2)ow.value=c2;}
   refreshSquadSel();
 }
 
 // ── Render ──
-function renderAll() {
-  renderMetrics(); renderDashActive(); renderDashProgress(); renderDashDeadlines();
-  renderFeatures(); renderRoadmap(); renderTeam(); renderReport(); renderSprint();
+function renderAll(){
+  renderMetrics();renderDashActive();renderDashProgress();renderDashDeadlines();
+  renderFeatures();renderRoadmap();renderTeam();renderReport();renderSprint();
   g('nb-count').textContent=features.length;
-  refreshDropdowns(); refreshQuarterSelectors();
+  refreshDropdowns();refreshQuarterSelectors();
 }
-
-function renderMetrics() {
+function renderMetrics(){
   var src=getSelectedFeatures();
   var done=src.filter(function(f){return f.status==='done';}).length;
   var bl=src.filter(function(f){return f.status==='blocked';}).length;
   var ip=src.filter(function(f){return f.status==='inprogress';}).length;
-  g('m-total').textContent=src.length; g('m-ip').textContent=ip;
-  g('m-done').textContent=done; g('m-blocked').textContent=bl;
+  g('m-total').textContent=src.length;g('m-ip').textContent=ip;
+  g('m-done').textContent=done;g('m-blocked').textContent=bl;
   g('m-total-s').textContent='';
   g('m-done-s').textContent=done>0?Math.round(done/src.length*100)+'% complete':'None yet';
   g('m-blk-s').textContent=bl>0?'Needs attention':'All clear';
 }
-
-function renderDashActive() {
+function renderDashActive(){
   var src=getSelectedFeatures();
   var active=src.filter(function(f){return ['inprogress','review','blocked','design'].indexOf(f.status)>=0;}).slice(0,6);
   var el=g('d-active');
   if(!active.length){el.innerHTML='<div class="empty">No active features.<br><button class="btn pri sm" style="margin-top:8px" onclick="openAddFeature()">Add first feature</button></div>';return;}
   el.innerHTML=active.map(fHTML).join('');
 }
-
-function renderDashProgress() {
+function renderDashProgress(){
   var src=getSelectedFeatures();
-  var el=g('d-prog'), groups={};
+  var el=g('d-prog'),groups={};
   src.forEach(function(f){var t=f.squad||f.team||'Unassigned';if(!groups[t])groups[t]=[];groups[t].push(f);});
-  var cols=['#185FA5','#534AB7','#0F6E56','#854F0B','#A32D2D'], html='', i=0;
+  var cols=['#185FA5','#534AB7','#0F6E56','#854F0B','#A32D2D'],html='',i=0;
   Object.keys(groups).slice(0,5).forEach(function(team){
     var items=groups[team];
     var pct=items.length?Math.round((items.filter(function(f){return f.status==='done';}).length+items.filter(function(f){return f.status==='review';}).length*0.75+items.filter(function(f){return f.status==='inprogress';}).length*0.5)/items.length*100):0;
@@ -1028,88 +1226,73 @@ function renderDashProgress() {
   });
   el.innerHTML=html||'<div style="color:var(--text3);font-size:13px">Add features with a squad to see progress.</div>';
 }
-
-function renderDashDeadlines() {
+function renderDashDeadlines(){
   var src=getSelectedFeatures();
-  var el=g('d-deadlines'), up=src.filter(function(f){return f.due&&f.status!=='done';}).slice(0,6);
+  var el=g('d-deadlines'),up=src.filter(function(f){return f.due&&f.status!=='done';}).slice(0,6);
   if(!up.length){el.innerHTML='<div style="color:var(--text3);font-size:13px;grid-column:1/-1">No upcoming deadlines.</div>';return;}
   el.innerHTML=up.map(function(f){
     return '<div style="background:var(--bg2);border-radius:var(--r);padding:11px;border:1px solid var(--border);cursor:pointer" data-id="'+f.id+'" onclick="openEditFeature(this.dataset.id)">'
       +'<div style="font-size:10px;color:var(--text3);margin-bottom:3px">'+esc(f.due)+'</div>'
       +'<div style="font-size:13px;font-weight:500">'+esc(f.name)+'</div>'
-      +'<div style="display:flex;align-items:center;gap:5px;margin-top:4px">'
-      +countdownHTML(f.dueRaw)
-      +'<span style="font-size:11px;color:var(--text3)">'+esc(f.owner||f.squad||'')+'</span></div>'
+      +'<div style="display:flex;align-items:center;gap:5px;margin-top:4px">'+countdownHTML(f.dueRaw)+'<span style="font-size:11px;color:var(--text3)">'+esc(f.owner||f.squad||'')+'</span></div>'
       +'</div>';
   }).join('');
 }
-
-function fHTML(f) {
-  var figma=f.figma?'<a href="'+f.figma+'" target="_blank" class="figma-btn" onclick="event.stopPropagation()">Figma ↗</a>':'';
+function fHTML(f){
+  var figma=f.figma?'<a href="'+f.figma+'" target="_blank" class="figma-btn" onclick="event.stopPropagation()">Figma \u2197</a>':'';
   var qb=f.quarter?'<span style="font-size:9px;padding:1px 6px;border-radius:8px;background:var(--bg3);color:var(--text3)">'+esc(f.quarter)+'</span>':'';
-  var cd=countdownHTML(f.dueRaw);
-  var status=f.status||'planned', priority=f.priority||'Medium';
+  var status=f.status||'planned',priority=f.priority||'Medium';
+  var byLine=f.updatedBy?'<span style="font-size:9px;color:var(--text3)">\u00b7 '+esc(f.updatedBy)+'</span>':'';
   return '<div class="fi" data-id="'+f.id+'" onclick="openEditFeature(this.dataset.id)">'
     +'<div class="dot-'+status+'"></div>'
     +'<div class="fi-info">'
     +'<div class="fi-name">'+esc(f.name)+'</div>'
     +'<div class="fi-meta" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">'
-    +'<span>'+esc(f.squad||f.team||'')+(f.owner?' · '+esc(f.owner):'')+'</span>'
-    +cd
-    +'</div>'
-    +'</div>'
+    +'<span>'+esc(f.squad||f.team||'')+(f.owner?' \u00b7 '+esc(f.owner):'')+'</span>'
+    +countdownHTML(f.dueRaw)+byLine
+    +'</div></div>'
     +'<div class="fi-actions">'+qb+figma
     +'<span class="badge b-'+status+'">'+(LABELS[status]||status)+'</span>'
     +'<span class="badge pri-'+priority+'" style="font-size:9px">'+priority+'</span>'
     +'</div></div>';
 }
-
-function renderFeatures() {
+function renderFeatures(){
   var search=(g('search')?g('search').value:'').toLowerCase();
   var src=currentFilter==='all'?features:features.filter(function(f){return f.status===currentFilter;});
-  if(search) src=src.filter(function(f){return ((f.name||'')+(f.squad||'')+(f.team||'')+(f.owner||'')+(f.notes||'')).toLowerCase().indexOf(search)>=0;});
+  if(search)src=src.filter(function(f){return ((f.name||'')+(f.squad||'')+(f.team||'')+(f.owner||'')+(f.notes||'')).toLowerCase().indexOf(search)>=0;});
   var el=g('feat-list');
   if(!src.length){el.innerHTML='<div class="empty">'+(features.length===0?'No features yet.<br><button class="btn pri sm" style="margin-top:8px" onclick="openAddFeature()">Add first feature</button>':'No features match this filter.')+'</div>';return;}
   el.innerHTML=src.map(fHTML).join('');
 }
-
 function setFilter(s,btn){
   currentFilter=s;
   document.querySelectorAll('.fpill').forEach(function(p){p.classList.remove('active');});
-  btn.classList.add('active'); renderFeatures();
+  btn.classList.add('active');renderFeatures();
 }
-
-function renderRoadmap() {
+function renderRoadmap(){
   var byQ={};
   features.forEach(function(f){if(!byQ[f.quarter])byQ[f.quarter]=[];byQ[f.quarter].push(f);});
   var el=g('roadmap');
   if(!Object.keys(byQ).length){el.innerHTML='<div class="empty">No roadmap data.</div>';return;}
   el.innerHTML=Object.keys(byQ).map(function(q){
-    var items=byQ[q], isSel=selectedQuarters.indexOf(q)>=0;
-    var rows=items.map(function(f){
-      return '<div class="rmrow" data-id="'+f.id+'" onclick="openEditFeature(this.dataset.id)">'
-        +'<div style="font-size:10px;font-weight:600;color:var(--text3);width:36px;flex-shrink:0">'+esc((f.due||'').substring(0,6))+'</div>'
-        +'<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:500">'+esc(f.name)+'</div>'
-        +'<div style="font-size:11px;color:var(--text3);display:flex;align-items:center;gap:6px">'+esc(f.squad||f.team||'')+(f.owner?' · '+esc(f.owner):'')
-        +countdownHTML(f.dueRaw)+'</div></div>'
-        +'<div style="display:flex;align-items:center;gap:5px">'
-        +(f.figma?'<a href="'+f.figma+'" target="_blank" class="figma-btn" onclick="event.stopPropagation()">Figma ↗</a>':'')
-        +'<span class="badge b-'+(f.status||'planned')+'">'+(LABELS[f.status]||f.status)+'</span>'
-        +'</div></div>';
-    }).join('');
-    return '<div class="rmq"><div class="rmqh">'+esc(q)
-      +' <span class="badge '+(isSel?'b-inprogress':'b-planned')+'" style="text-transform:none;letter-spacing:0">'+(isSel?'Selected':'Other')+'</span></div>'
-      +rows+'</div>';
+    var items=byQ[q],isSel=selectedQuarters.indexOf(q)>=0;
+    return '<div class="rmq"><div class="rmqh">'+esc(q)+' <span class="badge '+(isSel?'b-inprogress':'b-planned')+'" style="text-transform:none;letter-spacing:0">'+(isSel?'Selected':'Other')+'</span></div>'
+      +items.map(function(f){
+        return '<div class="rmrow" data-id="'+f.id+'" onclick="openEditFeature(this.dataset.id)">'
+          +'<div style="font-size:10px;font-weight:600;color:var(--text3);width:36px;flex-shrink:0">'+esc((f.due||'').substring(0,6))+'</div>'
+          +'<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:500">'+esc(f.name)+'</div>'
+          +'<div style="font-size:11px;color:var(--text3);display:flex;align-items:center;gap:6px">'+esc(f.squad||f.team||'')+(f.owner?' \u00b7 '+esc(f.owner):'')+countdownHTML(f.dueRaw)+'</div></div>'
+          +'<div style="display:flex;align-items:center;gap:5px">'+(f.figma?'<a href="'+f.figma+'" target="_blank" class="figma-btn" onclick="event.stopPropagation()">Figma \u2197</a>':'')+'<span class="badge b-'+(f.status||'planned')+'">'+(LABELS[f.status]||f.status)+'</span></div></div>';
+      }).join('')+'</div>';
   }).join('');
 }
-
-function renderTeam() {
+function renderTeam(){
   var sqEl=g('team-squads');
   if(sqEl){
     if(!squads.length){sqEl.innerHTML='<div class="empty">No squads yet.</div>';}
     else{
-      var cards=squads.map(function(s){
-        var c=SQUAD_C[s.color]||SQUAD_C.blue, sm=members.filter(function(m){return m.squad===s.name;});
+      sqEl.innerHTML='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;margin-bottom:16px">'+squads.map(function(s){
+        var c=SQUAD_C[s.color]||SQUAD_C.blue,sm=members.filter(function(m){return m.squad===s.name;});
         return '<div class="card" style="padding:14px">'
           +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">'
           +'<div style="display:flex;align-items:center;gap:8px"><div style="width:10px;height:10px;border-radius:50%;background:'+c.dot+'"></div>'
@@ -1118,15 +1301,13 @@ function renderTeam() {
           +'<button class="btn sm" data-sid="'+s.id+'" onclick="openEditSquad(this.dataset.sid)" style="font-size:10px;padding:2px 7px">Edit</button></div>'
           +sm.map(memberRowHTML).join('')
           +'<button class="btn sm" data-sqname="'+esc(s.name)+'" onclick="openAddMember(this.dataset.sqname)" style="width:100%;margin-top:8px;font-size:11px">+ Add to '+esc(s.name)+'</button></div>';
-      }).join('');
-      sqEl.innerHTML='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;margin-bottom:16px">'+cards+'</div>';
+      }).join('')+'</div>';
     }
   }
   var ae=g('team-all');
-  if(ae) ae.innerHTML=members.length?members.map(memberRowHTML).join(''):'<div style="color:var(--text3);font-size:13px">No members yet.</div>';
+  if(ae)ae.innerHTML=members.length?members.map(memberRowHTML).join(''):'<div style="color:var(--text3);font-size:13px">No members yet.</div>';
 }
-
-function memberRowHTML(m) {
+function memberRowHTML(m){
   var sq=squads.filter(function(s){return s.name===m.squad;})[0];
   var c=sq?(SQUAD_C[sq.color]||SQUAD_C.blue):SQUAD_C.gray;
   var init=m.name.split(' ').map(function(w){return w[0];}).join('').substring(0,2).toUpperCase();
@@ -1137,43 +1318,189 @@ function memberRowHTML(m) {
     +'<div style="font-size:11px;color:var(--text3)">'+esc(m.role||m.squad||'')+'</div></div>'
     +'<span class="badge b-inprogress">'+active+' active</span></div>';
 }
-
-function renderReport() {
+function renderReport(){
   var src=getSelectedFeatures();
   var qLabel=selectedQuarters.length===1?selectedQuarters[0]:selectedQuarters.join(', ');
-  var done=src.filter(function(f){return f.status==='done';});
-  var bl=src.filter(function(f){return f.status==='blocked';});
-  var ip=src.filter(function(f){return f.status==='inprogress';});
+  var done=src.filter(function(f){return f.status==='done';}),bl=src.filter(function(f){return f.status==='blocked';}),ip=src.filter(function(f){return f.status==='inprogress';});
   g('rpt-q').textContent=qLabel;
-  var stats=[['Quarter(s)',qLabel],['Features committed',src.length],['Completed',done.length+' of '+src.length],['In progress',ip.length],['Blocked',bl.length?bl.length+' — needs attention':'0 — all clear'],['Completion rate',src.length?Math.round(done.length/src.length*100)+'%':'—']];
-  g('rpt-stats').innerHTML=stats.map(function(row){
-    var isBlocked=row[0]==='Blocked'&&bl.length;
-    return '<div class="rstat"><span style="color:var(--text2)">'+row[0]+'</span><span style="font-weight:500;'+(isBlocked?'color:var(--red-text)':'')+'">'+(row[1])+'</span></div>';
+  var stats=[['Quarter(s)',qLabel],['Features committed',src.length],['Completed',done.length+' of '+src.length],['In progress',ip.length],['Blocked',bl.length?bl.length+' \u2014 needs attention':'0 \u2014 all clear'],['Completion rate',src.length?Math.round(done.length/src.length*100)+'%':'\u2014']];
+  g('rpt-stats').innerHTML=stats.map(function(row){var isBlocked=row[0]==='Blocked'&&bl.length;return '<div class="rstat"><span style="color:var(--text2)">'+row[0]+'</span><span style="font-weight:500;'+(isBlocked?'color:var(--red-text)':'')+'">'+(row[1])+'</span></div>';}).join('');
+  g('rpt-hi').innerHTML=done.map(function(f){return '\u2713 '+esc(f.name)+' shipped'+(f.updatedBy?' ('+esc(f.updatedBy)+')':'');}).join('<br>')||'No completed features yet.';
+  g('rpt-risk').innerHTML=bl.map(function(f){return '\u26a0 '+esc(f.name)+(f.notes?' \u2014 '+esc(f.notes):'');}).join('<br>')||'No blockers currently.';
+  g('rpt-break').innerHTML='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">'+Object.keys(LABELS).map(function(s){var n=src.filter(function(f){return f.status===s;}).length;return '<div style="background:var(--bg2);border-radius:var(--r);padding:11px;border:1px solid var(--border)"><div style="font-size:10px;color:var(--text3);margin-bottom:3px">'+LABELS[s]+'</div><div style="font-size:20px;font-weight:600">'+n+'</div></div>';}).join('')+'</div>';
+}
+
+// ── Sprint Planner ──
+function getWeekMonday(offset){
+  var d=new Date(),day=d.getDay(),diff=(day===0?-6:1-day);
+  d.setDate(d.getDate()+diff+offset*7);d.setHours(0,0,0,0);return d;
+}
+function weekKey(date){return date.toISOString().slice(0,10);}
+function fmtWeekLabel(mon){
+  var end=new Date(mon);end.setDate(end.getDate()+6);
+  var o={month:'short',day:'numeric'};
+  return mon.toLocaleDateString('en-US',o)+' \u2013 '+end.toLocaleDateString('en-US',o);
+}
+function isCurrentWeek(mon){return weekKey(mon)===weekKey(getWeekMonday(0));}
+function sprintPrev(){sprintWeekOffset-=4;renderSprint();}
+function sprintNext(){sprintWeekOffset+=4;renderSprint();}
+function sprintToday(){sprintWeekOffset=0;renderSprint();}
+function renderSprint(){
+  var squadFilter=(g('sp-squad-filter')||{value:''}).value;
+  var weeks=[];for(var i=0;i<4;i++)weeks.push(getWeekMonday(sprintWeekOffset+i));
+  var lastSun=new Date(weeks[3]);lastSun.setDate(lastSun.getDate()+6);
+  g('sp-week-label').textContent=fmtWeekLabel(weeks[0]).split(' \u2013 ')[0]+' \u2013 '+lastSun.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+  var sqSel=g('sp-squad-filter');
+  if(sqSel){var cv=sqSel.value;sqSel.innerHTML='<option value="">All squads</option>'+squads.map(function(s){return '<option value="'+esc(s.name)+'">'+esc(s.name)+'</option>';}).join('');sqSel.value=cv;}
+  var src=squadFilter?features.filter(function(f){return (f.squad||f.team||'')=== squadFilter;}):features;
+  var scheduled=src.filter(function(f){return f.sprintWeek;}),unscheduled=src.filter(function(f){return !f.sprintWeek&&f.status!=='done';});
+  var weeksEl=g('sp-weeks');
+  weeksEl.innerHTML=weeks.map(function(mon){
+    var wk=weekKey(mon),isCur=isCurrentWeek(mon);
+    var wf=scheduled.filter(function(f){return f.sprintWeek===wk;});
+    var cards=wf.map(function(f){
+      var isOD=f.dueRaw&&new Date(f.dueRaw+'T00:00:00')<new Date()&&f.status!=='done';
+      var cls='sp-card'+(isOD?' overdue':'')+(isCur?' current':'');
+      var assignee=f.sprintAssignee||f.owner||'';
+      return '<div class="'+cls+'" data-id="'+f.id+'" onclick="openSprintAssign(this.dataset.id)">'
+        +'<div class="sp-card-name">'+esc(f.name)+'</div>'
+        +'<div class="sp-card-meta"><span class="badge b-'+(f.status||'planned')+'" style="font-size:9px">'+(LABELS[f.status]||f.status)+'</span>'
+        +(assignee?'<span>'+esc(assignee)+'</span>':'')
+        +countdownHTML(f.dueRaw)
+        +(f.sprintNote?'<span style="font-style:italic;color:var(--text3)">'+esc(f.sprintNote.substring(0,40))+'</span>':'')
+        +'</div></div>';
+    }).join('');
+    return '<div class="sp-week-col'+(isCur?' current-week':'')+'">'
+      +'<div class="sp-week-head"><div class="sp-week-title">'+(isCur?'\u26a1 This week \u2014 ':'')+fmtWeekLabel(mon)+'</div>'
+      +'<div class="sp-week-sub">'+wf.length+' feature'+(wf.length===1?'':'s')+'</div></div>'
+      +'<div class="sp-week-body">'+cards
+      +'<button class="sp-add-btn" data-wk="'+wk+'" onclick="openSprintAdd(this.dataset.wk)">+ Assign feature</button>'
+      +'</div></div>';
   }).join('');
-  g('rpt-hi').innerHTML=done.map(function(f){return '✓ '+esc(f.name)+' shipped';}).join('<br>')||'No completed features yet.';
-  g('rpt-risk').innerHTML=bl.map(function(f){return '⚠ '+esc(f.name)+(f.notes?' — '+esc(f.notes):'');}).join('<br>')||'No blockers currently.';
-  g('rpt-break').innerHTML='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">'+Object.keys(LABELS).map(function(s){
-    var n=src.filter(function(f){return f.status===s;}).length;
-    return '<div style="background:var(--bg2);border-radius:var(--r);padding:11px;border:1px solid var(--border)"><div style="font-size:10px;color:var(--text3);margin-bottom:3px">'+LABELS[s]+'</div><div style="font-size:20px;font-weight:600">'+n+'</div></div>';
-  }).join('')+'</div>';
+  var unEl=g('sp-unscheduled');g('sp-unsched-count').textContent='('+unscheduled.length+')';
+  if(!unscheduled.length){unEl.innerHTML='<div style="color:var(--text3);font-size:13px;padding:8px 0">All active features are scheduled.</div>';return;}
+  unEl.innerHTML=unscheduled.map(function(f){
+    return '<div class="fi" data-id="'+f.id+'" onclick="openSprintAssign(this.dataset.id)">'
+      +'<div class="dot-'+(f.status||'planned')+'"></div>'
+      +'<div class="fi-info"><div class="fi-name">'+esc(f.name)+'</div>'
+      +'<div class="fi-meta" style="display:flex;align-items:center;gap:6px"><span>'+esc(f.squad||'')+(f.owner?' \u00b7 '+esc(f.owner):'')+'</span>'+countdownHTML(f.dueRaw)+'</div></div>'
+      +'<div class="fi-actions"><span class="badge b-'+(f.status||'planned')+'">'+(LABELS[f.status]||f.status)+'</span>'
+      +(f.quarter?'<span style="font-size:9px;padding:1px 6px;border-radius:8px;background:var(--bg3);color:var(--text3)">'+esc(f.quarter)+'</span>':'')
+      +'</div></div>';
+  }).join('');
+}
+function openSprintAdd(wk){
+  sprintFeatId=null;
+  g('sp-modal-title').textContent='Assign feature to week';
+  g('sp-week-date').value=wk;
+  g('sp-assignee').innerHTML='<option value="">\u2014 select member \u2014</option>'+members.map(function(m){return '<option value="'+esc(m.name)+'">'+esc(m.name)+'</option>';}).join('');
+  g('sp-note').value='';g('sp-unschedule-btn').style.display='none';
+  var unscheduled=features.filter(function(f){return !f.sprintWeek&&f.status!=='done';});
+  g('sp-modal-feat-name').innerHTML=unscheduled.length
+    ?'<div class="flbl" style="margin-bottom:6px">Pick a feature</div><select class="fsel" id="sp-feat-pick"><option value="">\u2014 select feature \u2014</option>'+unscheduled.map(function(f){return '<option value="'+f.id+'">'+esc(f.name)+(f.quarter?' ['+f.quarter+']':'')+'</option>';}).join('')+'</select>'
+    :'<div style="color:var(--text3);font-size:13px">No unscheduled features.</div>';
+  g('spov').classList.add('open');
+}
+function openSprintAssign(id){
+  var f=features.filter(function(x){return x.id===id;})[0];if(!f)return;
+  sprintFeatId=id;
+  g('sp-modal-title').textContent='Edit sprint assignment';
+  g('sp-modal-feat-name').innerHTML='<strong>'+esc(f.name)+'</strong>'+(f.quarter?' <span class="badge b-planned" style="font-size:9px">'+esc(f.quarter)+'</span>':'');
+  g('sp-week-date').value=f.sprintWeek||weekKey(getWeekMonday(sprintWeekOffset));
+  g('sp-assignee').innerHTML='<option value="">\u2014 select member \u2014</option>'+members.map(function(m){return '<option value="'+esc(m.name)+'"'+(m.name===f.sprintAssignee?' selected':'')+'>'+esc(m.name)+'</option>';}).join('');
+  g('sp-note').value=f.sprintNote||'';g('sp-unschedule-btn').style.display='block';
+  g('spov').classList.add('open');
+}
+function saveSprint(){
+  var fid=sprintFeatId;
+  if(!fid){var picker=document.getElementById('sp-feat-pick');if(picker)fid=picker.value;}
+  if(!fid){toast('Select a feature first');return;}
+  var f=features.filter(function(x){return x.id===fid;})[0];if(!f)return;
+  var wk=g('sp-week-date').value;if(!wk){toast('Select a week');return;}
+  var updated=Object.assign({},f,{sprintWeek:wk,sprintAssignee:g('sp-assignee').value,sprintNote:g('sp-note').value.trim(),updatedAt:Date.now(),updatedBy:currentUserName()});
+  closeModal('spov');
+  fbSet('features',updated.id,updated,function(){toast('Scheduled for week of '+new Date(wk+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})+' \u2713');renderSprint();});
+}
+function unscheduleFeature(){
+  if(!sprintFeatId)return;
+  var f=features.filter(function(x){return x.id===sprintFeatId;})[0];if(!f)return;
+  var updated=Object.assign({},f);delete updated.sprintWeek;delete updated.sprintAssignee;delete updated.sprintNote;
+  updated.updatedAt=Date.now();updated.updatedBy=currentUserName();
+  closeModal('spov');
+  fbSet('features',updated.id,updated,function(){toast('Removed from sprint');renderSprint();});
+}
+function openSpilloverModal(){
+  var today=new Date();today.setHours(0,0,0,0);
+  var currentQ=selectedQuarters.length?selectedQuarters[0]:'';
+  var spilled=features.filter(function(f){
+    if(f.status==='done')return false;
+    var isOD=f.dueRaw&&new Date(f.dueRaw+'T00:00:00')<today;
+    var isPastQ=f.quarter&&currentQ&&f.quarter!==currentQ&&f.quarter<currentQ;
+    return isOD||isPastQ;
+  });
+  var el=g('spill-list');
+  if(!spilled.length){el.innerHTML='<div style="color:var(--green-text);font-size:13px;padding:8px 0">No spillover \u2014 all features are on track!</div>';g('spill-ov').classList.add('open');return;}
+  el.innerHTML=spilled.map(function(f){
+    var isOD=f.dueRaw&&new Date(f.dueRaw+'T00:00:00')<today;
+    var reason=isOD?'Overdue':'Past quarter';
+    var nextQ=getNextQuarter(f.quarter);
+    var nextWk=weekKey(getWeekMonday(sprintWeekOffset));
+    return '<div class="spill-item">'
+      +'<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:500;color:var(--text)">'+esc(f.name)+'</div>'
+      +'<div style="font-size:11px;color:var(--text3);margin-top:2px"><span class="badge '+(reason==='Overdue'?'cd-urgent':'b-planned')+'" style="font-size:9px">'+reason+'</span> '+(f.quarter?'Q: '+esc(f.quarter)+' \u00b7 ':'')+(f.due?'Due: '+esc(f.due):'No due date')+'</div></div>'
+      +'<div style="display:flex;gap:5px;flex-shrink:0">'
+      +'<button class="btn sm" data-id="'+f.id+'" data-wk="'+nextWk+'" onclick="quickPushWeek(this.dataset.id,this.dataset.wk,this)" style="font-size:10px">\u2192 Next week</button>'
+      +(nextQ?'<button class="btn sm" data-id="'+f.id+'" data-q="'+esc(nextQ)+'" onclick="quickPushQuarter(this.dataset.id,this.dataset.q,this)" style="font-size:10px">\u2192 '+esc(nextQ)+'</button>':'')
+      +'</div></div>';
+  }).join('');
+  g('spill-ov').classList.add('open');
+}
+function getNextQuarter(qName){
+  if(!qName||!quarters.length)return null;
+  var idx=-1;
+  quarters.forEach(function(q,i){if(q.name===qName)idx=i;});
+  if(idx<0||idx>=quarters.length-1)return null;
+  return quarters[idx+1].name;
+}
+function quickPushWeek(id,wk,btn){
+  var f=features.filter(function(x){return x.id===id;})[0];if(!f)return;
+  var updated=Object.assign({},f,{sprintWeek:wk,updatedAt:Date.now(),updatedBy:currentUserName()});
+  btn.textContent='\u2713';btn.disabled=true;
+  fbSet('features',updated.id,updated,function(){renderSprint();});
+}
+function quickPushQuarter(id,newQ,btn){
+  var f=features.filter(function(x){return x.id===id;})[0];if(!f)return;
+  var updated=Object.assign({},f,{quarter:newQ,updatedAt:Date.now(),updatedBy:currentUserName()});
+  btn.textContent='\u2713';btn.disabled=true;
+  fbSet('features',updated.id,updated,function(){toast(esc(f.name)+' moved to '+newQ);});
+}
+function pushAllToNextWeek(){
+  var today=new Date();today.setHours(0,0,0,0);
+  var nextWk=weekKey(getWeekMonday(sprintWeekOffset));
+  var spilled=features.filter(function(f){return f.status!=='done'&&f.dueRaw&&new Date(f.dueRaw+'T00:00:00')<today;});
+  if(!spilled.length){toast('No overdue features');return;}
+  var count=0;
+  spilled.forEach(function(f){
+    var updated=Object.assign({},f,{sprintWeek:nextWk,updatedAt:Date.now(),updatedBy:currentUserName()});
+    db.collection('features').doc(f.id).set(updated).then(function(){count++;if(count===spilled.length){toast(count+' features pushed to next week');closeModal('spill-ov');renderSprint();}});
+  });
 }
 
 // ── AI Chat ──
-function sendMsg() {
-  var inp=g('cin'), text=inp.value.trim(); if(!text) return;
-  inp.value=''; addMsg('user',text); chatHistory.push({role:'user',content:text});
+function sendMsg(){
+  var inp=g('cin'),text=inp.value.trim();if(!text)return;
+  inp.value='';addMsg('user',text);chatHistory.push({role:'user',content:text});
   var lid=addLoader();
-  var ctx='You are a PM assistant. Selected quarters: '+selectedQuarters.join(', ')+'. Features: '+JSON.stringify(features.slice(0,40))+'. Team: '+JSON.stringify(members)+'. Be concise, actionable, use bullet points.';
+  var ctx='You are a PM assistant. User: '+currentUserName()+'. Selected quarters: '+selectedQuarters.join(', ')+'. Features: '+JSON.stringify(features.slice(0,40))+'. Be concise, actionable, use bullet points.';
   fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,system:ctx,messages:chatHistory})})
     .then(function(r){return r.json();}).then(function(data){
       removeLoader(lid);
       var reply=(data.content||[]).map(function(i){return i.text||'';}).join('');
-      chatHistory.push({role:'assistant',content:reply}); addMsg('ai',reply);
+      chatHistory.push({role:'assistant',content:reply});addMsg('ai',reply);
     }).catch(function(e){removeLoader(lid);addMsg('ai','Could not reach AI.');});
 }
 function sq(t){g('cin').value=t;sendMsg();}
 function aiReport(){go('chat');sq('Generate a full professional VP executive report for the selected quarters: '+selectedQuarters.join(', ')+'. Include: overview, highlights, risks, blockers, team performance, and next quarter planning preview.');}
-
 function addMsg(role,text){
   var el=g('cmsgs'),d=document.createElement('div');
   d.className='msg'+(role==='user'?' user':'');
@@ -1182,12 +1509,7 @@ function addMsg(role,text){
   d.innerHTML='<div class="mav av-'+(role==='ai'?'ai':'user')+'">'+(role==='ai'?'AI':'PM')+'</div><div class="mbubble">'+safe+'</div>';
   el.appendChild(d);el.scrollTop=el.scrollHeight;
 }
-function addLoader(){
-  var el=g('cmsgs'),d=document.createElement('div'),id='ld'+Date.now();
-  d.id=id;d.className='msg';
-  d.innerHTML='<div class="mav av-ai">AI</div><div class="mbubble"><div class="dots"><span></span><span></span><span></span></div></div>';
-  el.appendChild(d);el.scrollTop=el.scrollHeight;return id;
-}
+function addLoader(){var el=g('cmsgs'),d=document.createElement('div'),id='ld'+Date.now();d.id=id;d.className='msg';d.innerHTML='<div class="mav av-ai">AI</div><div class="mbubble"><div class="dots"><span></span><span></span><span></span></div></div>';el.appendChild(d);el.scrollTop=el.scrollHeight;return id;}
 function removeLoader(id){var e=document.getElementById(id);if(e)e.remove();}
 
 // ── Export / Import ──
@@ -1202,7 +1524,7 @@ function importData(ev){
     try{
       var d=JSON.parse(e.target.result);
       var fs=d.features||[],ms=d.members||[],ss=d.squads||[],qs=d.quarters||[];
-      var total=fs.length+ms.length+ss.length+qs.length, done=0;
+      var total=fs.length+ms.length+ss.length+qs.length,done=0;
       var finish=function(){done++;if(done===total)toast('Import complete: '+fs.length+' features');};
       fs.forEach(function(f){db.collection('features').doc(f.id).set(f).then(finish).catch(finish);});
       ms.forEach(function(m){db.collection('members').doc(m.id).set(m).then(finish).catch(finish);});
@@ -1215,15 +1537,17 @@ function importData(ev){
 }
 
 // ── Navigation ──
-var VIEW_TITLES={dashboard:'Dashboard',features:'Feature tracker',roadmap:'Roadmap',sprint:'Sprint Planner',team:'Team',report:'VP Report',chat:'AI Assistant'};
+var VIEW_TITLES={dashboard:'Dashboard',features:'Feature tracker',roadmap:'Roadmap',sprint:'Sprint Planner',team:'Team',report:'VP Report',deleted:'Deleted tasks',users:'Users',chat:'AI Assistant'};
 function go(v){
   document.querySelectorAll('.view').forEach(function(e){e.classList.remove('active');});
   document.querySelectorAll('.nav-item').forEach(function(e){e.classList.remove('active');});
-  g('view-'+v).classList.add('active'); g('vtitle').textContent=VIEW_TITLES[v]||v;
+  g('view-'+v).classList.add('active');g('vtitle').textContent=VIEW_TITLES[v]||v;
   document.querySelectorAll('.nav-item').forEach(function(el){
     var t=el.textContent.trim().toLowerCase();
-    if(t.indexOf(v.substring(0,4))===0||(v==='report'&&t.indexOf('vp')>=0)||(v==='chat'&&t.indexOf('ai')>=0)) el.classList.add('active');
+    if(t.indexOf(v.substring(0,4))===0||(v==='report'&&t.indexOf('vp')>=0)||(v==='chat'&&t.indexOf('ai')>=0)||(v==='deleted'&&t.indexOf('deleted')>=0)||(v==='users'&&t.indexOf('user')>=0)) el.classList.add('active');
   });
+  if(v==='deleted') loadDeleted();
+  if(v==='users') loadUsers();
 }
 
 // ── UI helpers ──
@@ -1234,312 +1558,49 @@ function showError(msg){
   var retry=document.createElement('button');retry.className='btn sm';retry.textContent='Retry';retry.style.marginTop='12px';retry.onclick=function(){location.reload();};
   g('loading-screen').appendChild(retry);
 }
-function setSyncOk(){g('sdot').className='sdot';g('stxt').textContent='Firebase · live';}
+function setSyncOk(){g('sdot').className='sdot';g('stxt').textContent='Firebase \u00b7 live';}
 function showSaveBar(state){
   var bar=g('sbar');bar.className='sbar show '+state;
-  if(state==='saving') bar.textContent='Saving to Firebase...';
-  else if(state==='saved'){bar.textContent='✓ Saved to Firebase';setTimeout(function(){bar.classList.remove('show');},2500);}
-  else if(state==='err') bar.textContent='⚠ Firebase save failed — check connection';
+  if(state==='saving')bar.textContent='Saving to Firebase...';
+  else if(state==='saved'){bar.textContent='\u2713 Saved to Firebase';setTimeout(function(){bar.classList.remove('show');},2500);}
+  else if(state==='err')bar.textContent='\u26a0 Firebase save failed \u2014 check connection';
 }
 function toast(msg){var t=g('toast');t.textContent=msg;t.classList.add('show');setTimeout(function(){t.classList.remove('show');},3000);}
 function g(id){return document.getElementById(id);}
 function esc(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 
-// ── Sprint Planner ──
-var sprintWeekOffset = 0;    // 0 = current week, -1 = last, +1 = next
-var sprintFeatId = null;     // feature being scheduled
-
-// Get Monday of a week (offset from current)
-function getWeekMonday(offset) {
-  var d = new Date();
-  var day = d.getDay(); // 0=Sun
-  var diff = (day === 0 ? -6 : 1 - day); // go to Monday
-  d.setDate(d.getDate() + diff + offset * 7);
-  d.setHours(0,0,0,0);
-  return d;
-}
-
-function weekKey(date) {
-  // YYYY-MM-DD of the Monday
-  return date.toISOString().slice(0,10);
-}
-
-function fmtWeekLabel(monday) {
-  var end = new Date(monday); end.setDate(end.getDate()+6);
-  var opts = {month:'short',day:'numeric'};
-  return monday.toLocaleDateString('en-US',opts) + ' – ' + end.toLocaleDateString('en-US',opts);
-}
-
-function isCurrentWeek(monday) {
-  var cur = getWeekMonday(0);
-  return weekKey(monday) === weekKey(cur);
-}
-
-function renderSprint() {
-  var squadFilter = (document.getElementById('sp-squad-filter')||{value:''}).value;
-
-  // Build 4-week grid centred on current offset
-  var weeks = [];
-  for (var i = 0; i < 4; i++) {
-    var mon = getWeekMonday(sprintWeekOffset + i);
-    weeks.push(mon);
-  }
-
-  // Label
-  var firstMon = weeks[0], lastSun = new Date(weeks[3]); lastSun.setDate(lastSun.getDate()+6);
-  g('sp-week-label').textContent = fmtWeekLabel(firstMon).split(' – ')[0] + ' – ' + lastSun.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
-
-  // Refresh squad filter dropdown
-  var sqSel = g('sp-squad-filter');
-  if (sqSel) {
-    var curVal = sqSel.value;
-    sqSel.innerHTML = '<option value="">All squads</option>' +
-      squads.map(function(s){ return '<option value="'+esc(s.name)+'">'+esc(s.name)+'</option>'; }).join('');
-    sqSel.value = curVal;
-  }
-
-  // Filter features by squad if needed
-  var src = squadFilter
-    ? features.filter(function(f){ return (f.squad||f.team||'')=== squadFilter; })
-    : features;
-
-  // Get sprint-assigned features
-  var scheduled = src.filter(function(f){ return f.sprintWeek; });
-  var unscheduled = src.filter(function(f){ return !f.sprintWeek && f.status !== 'done'; });
-
-  // Build week keys for this 4-week window
-  var weekKeys = weeks.map(weekKey);
-
-  // Render week columns
-  var weeksEl = g('sp-weeks');
-  weeksEl.innerHTML = weeks.map(function(mon) {
-    var wk = weekKey(mon);
-    var isCur = isCurrentWeek(mon);
-    var weekFeats = scheduled.filter(function(f){ return f.sprintWeek === wk; });
-
-    var cards = weekFeats.map(function(f) {
-      var isOverdue = f.dueRaw && new Date(f.dueRaw+'T00:00:00') < new Date() && f.status !== 'done';
-      var cls = 'sp-card' + (isOverdue?' overdue':'') + (isCur?' current':'');
-      var assignee = f.sprintAssignee || f.owner || '';
-      return '<div class="'+cls+'" data-id="'+f.id+'" onclick="openSprintAssign(this.dataset.id)">'
-        +'<div class="sp-card-name">'+esc(f.name)+'</div>'
-        +'<div class="sp-card-meta">'
-        +'<span class="badge b-'+(f.status||'planned')+'" style="font-size:9px">'+(LABELS[f.status]||f.status)+'</span>'
-        +(assignee?'<span>'+esc(assignee)+'</span>':'')
-        +countdownHTML(f.dueRaw)
-        +(f.sprintNote?'<span style="font-style:italic;color:var(--text3)">'+esc(f.sprintNote.substring(0,40))+'</span>':'')
-        +'</div></div>';
-    }).join('');
-
-    return '<div class="sp-week-col'+(isCur?' current-week':'')+'">'
-      +'<div class="sp-week-head">'
-      +'<div class="sp-week-title">'+(isCur?'⚡ This week — ':'')+fmtWeekLabel(mon)+'</div>'
-      +'<div class="sp-week-sub">'+weekFeats.length+' feature'+(weekFeats.length===1?'':'s')+'</div>'
-      +'</div>'
-      +'<div class="sp-week-body">'
-      +cards
-      +'<button class="sp-add-btn" data-wk="'+wk+'" onclick="openSprintAdd(this.dataset.wk)">+ Assign feature</button>'
-      +'</div></div>';
-  }).join('');
-
-  // Unscheduled panel
-  var unschedEl = g('sp-unscheduled');
-  g('sp-unsched-count').textContent = '('+unscheduled.length+')';
-  if (!unscheduled.length) {
-    unschedEl.innerHTML = '<div style="color:var(--text3);font-size:13px;padding:8px 0">All active features are scheduled.</div>';
-  } else {
-    unschedEl.innerHTML = unscheduled.map(function(f) {
-      return '<div class="fi" data-id="'+f.id+'" onclick="openSprintAssign(this.dataset.id)">'
-        +'<div class="dot-'+(f.status||'planned')+'"></div>'
-        +'<div class="fi-info">'
-        +'<div class="fi-name">'+esc(f.name)+'</div>'
-        +'<div class="fi-meta" style="display:flex;align-items:center;gap:6px">'
-        +'<span>'+esc(f.squad||'')+(f.owner?' · '+esc(f.owner):'')+'</span>'
-        +countdownHTML(f.dueRaw)
-        +'</div></div>'
-        +'<div class="fi-actions"><span class="badge b-'+(f.status||'planned')+'">'+(LABELS[f.status]||f.status)+'</span>'
-        +(f.quarter?'<span style="font-size:9px;padding:1px 6px;border-radius:8px;background:var(--bg3);color:var(--text3)">'+esc(f.quarter)+'</span>':'')
-        +'</div></div>';
-    }).join('');
-  }
-}
-
-function sprintPrev() { sprintWeekOffset -= 4; renderSprint(); }
-function sprintNext() { sprintWeekOffset += 4; renderSprint(); }
-function sprintToday() { sprintWeekOffset = 0; renderSprint(); }
-
-// Open assign modal for a specific week (from + button)
-function openSprintAdd(wk) {
-  sprintFeatId = null;
-  g('sp-modal-title').textContent = 'Assign feature to week';
-  g('sp-modal-feat-name').textContent = 'Select a feature from the unscheduled list, or click a feature to schedule it.';
-  g('sp-week-date').value = wk;
-  g('sp-assignee').innerHTML = '<option value="">— select member —</option>'+members.map(function(m){return '<option value="'+esc(m.name)+'">'+esc(m.name)+'</option>';}).join('');
-  g('sp-note').value = '';
-  g('sp-unschedule-btn').style.display = 'none';
-
-  // Show feature picker
-  var unscheduled = features.filter(function(f){ return !f.sprintWeek && f.status !== 'done'; });
-  if (unscheduled.length) {
-    g('sp-modal-feat-name').innerHTML = '<div class="flbl" style="margin-bottom:6px">Pick a feature</div>'
-      +'<select class="fsel" id="sp-feat-pick"><option value="">— select feature —</option>'
-      +unscheduled.map(function(f){return '<option value="'+f.id+'">'+esc(f.name)+(f.quarter?' ['+f.quarter+']':'')+'</option>';}).join('')
-      +'</select>';
-  }
-  g('spov').classList.add('open');
-}
-
-// Open assign modal for an existing scheduled feature
-function openSprintAssign(id) {
-  var f = features.filter(function(x){ return x.id===id; })[0]; if(!f) return;
-  sprintFeatId = id;
-  g('sp-modal-title').textContent = 'Edit sprint assignment';
-  g('sp-modal-feat-name').innerHTML = '<strong>'+esc(f.name)+'</strong>'
-    +(f.quarter?' <span class="badge b-planned" style="font-size:9px">'+esc(f.quarter)+'</span>':'');
-  g('sp-week-date').value = f.sprintWeek || weekKey(getWeekMonday(sprintWeekOffset));
-  g('sp-assignee').innerHTML = '<option value="">— select member —</option>'+members.map(function(m){return '<option value="'+esc(m.name)+'"'+(m.name===f.sprintAssignee?' selected':'')+'>'+esc(m.name)+'</option>';}).join('');
-  g('sp-note').value = f.sprintNote || '';
-  g('sp-unschedule-btn').style.display = 'block';
-  g('spov').classList.add('open');
-}
-
-function saveSprint() {
-  var fid = sprintFeatId;
-  if (!fid) {
-    // New assignment — get from picker
-    var picker = document.getElementById('sp-feat-pick');
-    if (picker) fid = picker.value;
-  }
-  if (!fid) { toast('Select a feature first'); return; }
-
-  var f = features.filter(function(x){ return x.id===fid; })[0]; if(!f) return;
-  var wk = g('sp-week-date').value;
-  if (!wk) { toast('Select a week'); return; }
-
-  var updated = Object.assign({}, f, {
-    sprintWeek:     wk,
-    sprintAssignee: g('sp-assignee').value,
-    sprintNote:     g('sp-note').value.trim(),
-    updatedAt:      Date.now()
-  });
-
-  closeModal('spov');
-  fbSet('features', updated.id, updated, function(){
-    toast('Scheduled for week of '+new Date(wk+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})+' ✓');
-    renderSprint();
+// ── Bootstrap ──
+if (initDB()) {
+  // Watch auth state — this is the gate for everything
+  auth.onAuthStateChanged(function(user) {
+    if (user) {
+      // Logged in — hide login, load profile, start app
+      g('auth-screen').classList.add('hide');
+      currentUser = user;
+      // Load user profile from Firestore
+      db.collection('users').doc(user.uid).get()
+        .then(function(doc) {
+          currentUserProfile = doc.exists ? doc.data() : {uid:user.uid, name:user.displayName||user.email, email:user.email};
+          // Update UI badge
+          var name = currentUserProfile.name || user.email;
+          var initials = name.split(' ').map(function(w){return w[0];}).join('').substring(0,2).toUpperCase();
+          g('user-av').textContent = initials;
+          g('user-name').textContent = name.split(' ')[0]; // first name only
+          // Start loading data
+          setLoading(true, 'Loading data...');
+          listenAll();
+        });
+    } else {
+      // Not logged in — show login screen
+      currentUser = null; currentUserProfile = null;
+      g('auth-screen').classList.remove('hide');
+      g('loading-screen').classList.add('hide');
+      g('login-btn').textContent = 'Sign in';
+      g('login-btn').disabled = false;
+    }
   });
 }
 
-function unscheduleFeature() {
-  if (!sprintFeatId) return;
-  var f = features.filter(function(x){ return x.id===sprintFeatId; })[0]; if(!f) return;
-  var updated = Object.assign({}, f);
-  delete updated.sprintWeek;
-  delete updated.sprintAssignee;
-  delete updated.sprintNote;
-  updated.updatedAt = Date.now();
-  closeModal('spov');
-  fbSet('features', updated.id, updated, function(){
-    toast('Removed from sprint');
-    renderSprint();
-  });
-}
-
-// Spillover: features that are overdue or from past quarters
-function openSpilloverModal() {
-  var today = new Date(); today.setHours(0,0,0,0);
-  var currentQ = selectedQuarters.length ? selectedQuarters[0] : '';
-
-  var spilled = features.filter(function(f) {
-    if (f.status === 'done') return false;
-    var isOverdue = f.dueRaw && new Date(f.dueRaw+'T00:00:00') < today;
-    var isPastQ = f.quarter && currentQ && f.quarter !== currentQ && quarters.some(function(q){return q.name===f.quarter;}) && f.quarter < currentQ;
-    return isOverdue || isPastQ;
-  });
-
-  var el = g('spill-list');
-  if (!spilled.length) {
-    el.innerHTML = '<div style="color:var(--green-text);font-size:13px;padding:8px 0">No spillover — all features are on track!</div>';
-    g('spill-ov').classList.add('open');
-    return;
-  }
-
-  el.innerHTML = spilled.map(function(f) {
-    var isOverdue = f.dueRaw && new Date(f.dueRaw+'T00:00:00') < today;
-    var reason = isOverdue ? 'Overdue' : 'Past quarter';
-    var nextQ = getNextQuarter(f.quarter);
-    var nextWk = weekKey(getWeekMonday(sprintWeekOffset));
-
-    return '<div class="spill-item">'
-      +'<div style="flex:1;min-width:0">'
-      +'<div style="font-size:13px;font-weight:500;color:var(--text)">'+esc(f.name)+'</div>'
-      +'<div style="font-size:11px;color:var(--text3);margin-top:2px">'
-      +'<span class="badge '+(reason==='Overdue'?'cd-urgent':'b-planned')+'" style="font-size:9px">'+reason+'</span> '
-      +(f.quarter?'Q: '+esc(f.quarter)+' · ':'')
-      +(f.due?'Due: '+esc(f.due):'No due date')
-      +'</div></div>'
-      +'<div style="display:flex;gap:5px;flex-shrink:0">'
-      +'<button class="btn sm" data-id="'+f.id+'" data-wk="'+nextWk+'" onclick="quickPushWeek(this.dataset.id,this.dataset.wk,this)" style="font-size:10px">→ Next week</button>'
-      +(nextQ?'<button class="btn sm" data-id="'+f.id+'" data-q="'+esc(nextQ)+'" onclick="quickPushQuarter(this.dataset.id,this.dataset.q,this)" style="font-size:10px">→ '+esc(nextQ)+'</button>':'')
-      +'</div></div>';
-  }).join('');
-
-  g('spill-ov').classList.add('open');
-}
-
-function getNextQuarter(qName) {
-  if (!qName || !quarters.length) return null;
-  var idx = quarters.findIndex(function(q){ return q.name === qName; });
-  if (idx < 0 || idx >= quarters.length-1) return null;
-  return quarters[idx+1].name;
-}
-
-function quickPushWeek(id, wk, btn) {
-  var f = features.filter(function(x){ return x.id===id; })[0]; if(!f) return;
-  var updated = Object.assign({}, f, {sprintWeek:wk, updatedAt:Date.now()});
-  btn.textContent = '✓';
-  btn.disabled = true;
-  fbSet('features', updated.id, updated, function(){
-    renderSprint();
-  });
-}
-
-function quickPushQuarter(id, newQ, btn) {
-  var f = features.filter(function(x){ return x.id===id; })[0]; if(!f) return;
-  var updated = Object.assign({}, f, {quarter:newQ, updatedAt:Date.now()});
-  btn.textContent = '✓';
-  btn.disabled = true;
-  fbSet('features', updated.id, updated, function(){
-    toast(esc(f.name)+' moved to '+newQ);
-  });
-}
-
-function pushAllToNextWeek() {
-  var today = new Date(); today.setHours(0,0,0,0);
-  var nextWk = weekKey(getWeekMonday(sprintWeekOffset));
-  var spilled = features.filter(function(f){
-    return f.status !== 'done' && f.dueRaw && new Date(f.dueRaw+'T00:00:00') < today;
-  });
-  if (!spilled.length) { toast('No overdue features'); return; }
-  var count = 0;
-  spilled.forEach(function(f) {
-    var updated = Object.assign({}, f, {sprintWeek:nextWk, updatedAt:Date.now()});
-    db.collection('features').doc(f.id).set(updated).then(function(){
-      count++;
-      if (count === spilled.length) {
-        toast(count+' features pushed to next week');
-        closeModal('spill-ov');
-        renderSprint();
-      }
-    });
-  });
-}
-
-// ── End Sprint ──
-
-// ── Start ──
-setLoading(true,'Connecting to Firebase...');
-if(initDB()) listenAll();
 </script>
 </body>
 </html>
