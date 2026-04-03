@@ -514,7 +514,7 @@ body{font-family:var(--font);background:var(--bg3);color:var(--text);font-size:1
     <div class="fr"><div class="flbl">Full name *</div><input class="fi2" id="m-name" placeholder="e.g. Budi K."></div>
     <div class="fr"><div class="flbl">Role</div><input class="fi2" id="m-role" placeholder="e.g. Tech Lead"></div>
     <div class="fr"><div class="flbl">Squad</div><select class="fsel" id="m-squad"><option value="">— select —</option></select></div>
-    <div class="fr"><div class="flbl">Email / Slack</div><input class="fi2" id="m-email" placeholder="e.g. budi@company.com"></div>
+    <div class="fr"><div class="flbl">Email / Slack</div><input class="fi2" id="m-email" placeholder="e.g. budi@company.com"><div class="fhint" id="m-email-hint" style="color:var(--blue-text)"></div></div>
   </div>
   <div class="mfoot">
     <div><button class="btn danger sm" id="mdel-btn" onclick="showDel('mdel')" style="display:none">Remove</button></div>
@@ -1152,7 +1152,12 @@ function openEditFeature(id){
 function openAddMember(squadName){
   editMId=null;g('mtitle').textContent='Add member';
   g('mdel-btn').style.display='none';hideDel('mdel');
-  g('m-name').value='';g('m-role').value='';g('m-email').value='';
+  g('m-name').value='';g('m-role').value='';
+  // Pre-fill with logged-in user's email so "My tasks" works automatically
+  var myEmail=currentUser?currentUser.email:'';
+  g('m-email').value=myEmail;
+  var hint=g('m-email-hint');
+  if(hint)hint.textContent=myEmail?'Pre-filled with your login email — change if adding someone else':'';
   refreshSquadSel();if(squadName)g('m-squad').value=squadName;
   g('mov').classList.add('open');setTimeout(function(){g('m-name').focus();},100);
 }
@@ -1161,6 +1166,13 @@ function openEditMember(id){
   editMId=id;g('mtitle').textContent='Edit member';
   g('mdel-btn').style.display='block';hideDel('mdel');
   g('m-name').value=m.name||'';g('m-role').value=m.role||'';g('m-email').value=m.email||'';
+  var hint=g('m-email-hint');
+  var myEmail=currentUser?currentUser.email:'';
+  if(hint){
+    var matched=myEmail&&(m.email||'').toLowerCase().trim()===myEmail.toLowerCase().trim();
+    hint.textContent=matched?'✓ Linked to your account — My tasks will show this member\'s features':'Set email to your login email to enable "My tasks" filtering';
+    hint.style.color=matched?'var(--green-text)':'var(--amber-text)';
+  }
   refreshSquadSel();g('m-squad').value=m.squad||'';
   g('mov').classList.add('open');
 }
@@ -1225,16 +1237,22 @@ function renderDashProgress(){
   var src=getSelectedFeatures();
   var el=g('d-prog'),groups={};
   src.forEach(function(f){var t=f.squad||f.team||'Unassigned';if(!groups[t])groups[t]=[];groups[t].push(f);});
+  // Ensure every squad exists in groups even with 0 features
+  squads.forEach(function(s){if(!groups[s.name])groups[s.name]=[];});
   var cols=['#185FA5','#534AB7','#0F6E56','#854F0B','#A32D2D','#6b6a65','#0891b2','#7c3aed'],html='',i=0;
-  Object.keys(groups).forEach(function(team){
-    var items=groups[team];
+  // Show known squads first (in squads order), then any orphan groups
+  var knownNames=squads.map(function(s){return s.name;});
+  var allKeys=knownNames.concat(Object.keys(groups).filter(function(k){return knownNames.indexOf(k)<0;}));
+  allKeys.forEach(function(team){
+    var items=groups[team]||[];
     var sq=squads.filter(function(s){return s.name===team;})[0];
     var barColor=sq?(SQUAD_C[sq.color]||SQUAD_C.blue).dot:cols[i%cols.length];
     var pct=items.length?Math.round((items.filter(function(f){return f.status==='done';}).length+items.filter(function(f){return f.status==='review';}).length*0.75+items.filter(function(f){return f.status==='inprogress';}).length*0.5)/items.length*100):0;
-    html+='<div style="margin-bottom:12px"><div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-size:12px;color:var(--text2)">'+esc(team)+'</span><span style="font-size:12px;font-weight:500">'+pct+'%</span></div><div class="pbar"><div class="pfill" style="width:'+pct+'%;background:'+barColor+'"></div></div></div>';
+    var countLabel=items.length+' feature'+(items.length===1?'':'s');
+    html+='<div style="margin-bottom:12px"><div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-size:12px;color:var(--text2)">'+esc(team)+'</span><span style="font-size:12px;font-weight:500">'+pct+'% <span style="font-size:10px;color:var(--text3);font-weight:400">('+countLabel+')</span></span></div><div class="pbar"><div class="pfill" style="width:'+pct+'%;background:'+barColor+'"></div></div></div>';
     i++;
   });
-  el.innerHTML=html||'<div style="color:var(--text3);font-size:13px">Add features with a squad to see progress.</div>';
+  el.innerHTML=html||'<div style="color:var(--text3);font-size:13px">No squads yet. Add squads in the Team menu.</div>';
 }
 function renderDashDeadlines(){
   var src=getSelectedFeatures();
@@ -1266,12 +1284,29 @@ function fHTML(f){
     +'<span class="badge pri-'+priority+'" style="font-size:9px">'+priority+'</span>'
     +'</div></div>';
 }
+function getMyNames(){
+  // Returns array of all names that belong to the logged-in user.
+  // Matches: display name from users collection + any member record with matching email.
+  var names=[];
+  var myName=currentUserName(); if(myName&&myName!=='Unknown') names.push(myName);
+  var myEmail=currentUser?currentUser.email:'';
+  if(myEmail){
+    members.forEach(function(m){
+      if((m.email||'').toLowerCase().trim()===(myEmail||'').toLowerCase().trim()){
+        if(names.indexOf(m.name)<0) names.push(m.name);
+      }
+    });
+  }
+  return names;
+}
 function renderFeatures(){
   var search=(g('search')?g('search').value:'').toLowerCase();
-  var myName=currentUserName();
   var src;
   if(currentFilter==='mytasks'){
-    src=features.filter(function(f){return f.owner===myName||f.sprintAssignee===myName;});
+    var myNames=getMyNames();
+    src=features.filter(function(f){
+      return myNames.indexOf(f.owner)>=0||myNames.indexOf(f.sprintAssignee)>=0;
+    });
   } else if(currentFilter==='all'){
     src=features;
   } else {
@@ -1281,7 +1316,7 @@ function renderFeatures(){
   var el=g('feat-list');
   if(!src.length){
     var emptyMsg=features.length===0?'No features yet.<br><button class="btn pri sm" style="margin-top:8px" onclick="openAddFeature()">Add first feature</button>'
-      :currentFilter==='mytasks'?'No tasks assigned to you yet.'
+      :currentFilter==='mytasks'?'No tasks assigned to you. Make sure your member email matches your login email.'
       :'No features match this filter.';
     el.innerHTML='<div class="empty">'+emptyMsg+'</div>';return;
   }
