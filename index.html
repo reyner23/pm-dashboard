@@ -355,6 +355,7 @@ body{font-family:var(--font);background:var(--bg3);color:var(--text);font-size:1
         <button class="fpill" onclick="setFilter('blocked',this)">Blocked</button>
         <button class="fpill" onclick="setFilter('planned',this)">Planned</button>
         <button class="fpill" onclick="setFilter('done',this)">Done</button>
+        <button class="fpill" id="mytasks-pill" onclick="setFilter('mytasks',this)" style="border-style:dashed">👤 My tasks</button>
       </div>
       <input class="fi2" id="search" style="width:180px;padding:5px 10px;font-size:12px" placeholder="Search..." oninput="renderFeatures()">
     </div>
@@ -984,7 +985,7 @@ function openManageQuarters(){
 function renderQuarterList(){
   var el=g('q-list-modal');
   if(!quarters.length){el.innerHTML='<div style="color:var(--text3);font-size:13px">No quarters yet.</div>';return;}
-  el.innerHTML=quarters.map(function(q){
+  el.innerHTML=sortQuarters(quarters).map(function(q){
     return '<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border)">'
       +'<span style="flex:1;font-size:13px;font-weight:500;color:var(--text)">'+esc(q.name)+'</span>'
       +'<button class="btn sm" data-qid="'+q.id+'" data-qname="'+esc(q.name)+'" onclick="startEditQuarter(this.dataset.qid,this.dataset.qname)" style="font-size:10px;padding:2px 7px">Edit</button>'
@@ -1049,7 +1050,7 @@ function listenAll(){
     if(loaded.f&&loaded.m&&loaded.s&&loaded.q){renderTeam();refreshDropdowns();}
   },function(e){showError('Squads: '+e.message);});
   db.collection('quarters').onSnapshot(function(snap){
-    var d=snap.docs.map(function(d){return d.data();}); quarters=d.length?d:defaultQuarters();
+    var d=snap.docs.map(function(d){return d.data();}); quarters=sortQuarters(d.length?d:defaultQuarters());
     if(!snap.docs.length) defaultQuarters().forEach(function(q){db.collection('quarters').doc(q.id).set(q);});
     loaded.q=true; checkReady();
     if(loaded.f&&loaded.m&&loaded.s&&loaded.q){refreshQuarterSelectors();refreshFeatureQuarterDropdown();}
@@ -1058,6 +1059,13 @@ function listenAll(){
 
 function defaultSquads(){return [{id:'sq-dev',name:'Dev',color:'blue'},{id:'sq-uiux',name:'UI/UX',color:'purple'},{id:'sq-pm',name:'Product',color:'amber'}];}
 function defaultQuarters(){return [{id:'q1-2026',name:'Q1 2026'},{id:'q2-2026',name:'Q2 2026'},{id:'q3-2026',name:'Q3 2026'},{id:'q4-2026',name:'Q4 2026'},{id:'q1-2027',name:'Q1 2027'}];}
+function sortQuarters(arr){
+  return arr.slice().sort(function(a,b){
+    var pa=a.name.match(/Q(\d)\s+(\d{4})/),pb=b.name.match(/Q(\d)\s+(\d{4})/);
+    if(pa&&pb){var ya=parseInt(pa[2]),yb=parseInt(pb[2]),qa=parseInt(pa[1]),qb=parseInt(pb[1]);return ya!==yb?ya-yb:qa-qb;}
+    return a.name.localeCompare(b.name);
+  });
+}
 
 // ── Quarter selection ──
 function getSelectedFeatures(){
@@ -1075,7 +1083,7 @@ function refreshQuarterSelectors(){
   var els=[g('q-selector'),g('q-selector-rpt')];
   els.forEach(function(el){
     if(!el)return;
-    var pills=quarters.map(function(q){
+    var pills=sortQuarters(quarters).map(function(q){
       var active=selectedQuarters.indexOf(q.name)>=0;
       return '<span class="'+(active?'qpill active':'qpill')+'" data-qn="'+esc(q.name)+'" onclick="toggleQuarter(this.dataset.qn)">'+esc(q.name)+'</span>';
     }).join('');
@@ -1086,7 +1094,7 @@ function refreshQuarterSelectors(){
 function refreshFeatureQuarterDropdown(){
   var sel=g('f-quarter'); if(!sel)return;
   var cur=sel.value;
-  sel.innerHTML=quarters.map(function(q){return '<option value="'+esc(q.name)+'">'+esc(q.name)+'</option>';}).join('');
+  sel.innerHTML=sortQuarters(quarters).map(function(q){return '<option value="'+esc(q.name)+'">'+esc(q.name)+'</option>';}).join('');
   if(cur)sel.value=cur;
 }
 
@@ -1217,11 +1225,13 @@ function renderDashProgress(){
   var src=getSelectedFeatures();
   var el=g('d-prog'),groups={};
   src.forEach(function(f){var t=f.squad||f.team||'Unassigned';if(!groups[t])groups[t]=[];groups[t].push(f);});
-  var cols=['#185FA5','#534AB7','#0F6E56','#854F0B','#A32D2D'],html='',i=0;
-  Object.keys(groups).slice(0,5).forEach(function(team){
+  var cols=['#185FA5','#534AB7','#0F6E56','#854F0B','#A32D2D','#6b6a65','#0891b2','#7c3aed'],html='',i=0;
+  Object.keys(groups).forEach(function(team){
     var items=groups[team];
+    var sq=squads.filter(function(s){return s.name===team;})[0];
+    var barColor=sq?(SQUAD_C[sq.color]||SQUAD_C.blue).dot:cols[i%cols.length];
     var pct=items.length?Math.round((items.filter(function(f){return f.status==='done';}).length+items.filter(function(f){return f.status==='review';}).length*0.75+items.filter(function(f){return f.status==='inprogress';}).length*0.5)/items.length*100):0;
-    html+='<div style="margin-bottom:12px"><div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-size:12px;color:var(--text2)">'+esc(team)+'</span><span style="font-size:12px;font-weight:500">'+pct+'%</span></div><div class="pbar"><div class="pfill" style="width:'+pct+'%;background:'+cols[i%cols.length]+'"></div></div></div>';
+    html+='<div style="margin-bottom:12px"><div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-size:12px;color:var(--text2)">'+esc(team)+'</span><span style="font-size:12px;font-weight:500">'+pct+'%</span></div><div class="pbar"><div class="pfill" style="width:'+pct+'%;background:'+barColor+'"></div></div></div>';
     i++;
   });
   el.innerHTML=html||'<div style="color:var(--text3);font-size:13px">Add features with a squad to see progress.</div>';
@@ -1258,10 +1268,23 @@ function fHTML(f){
 }
 function renderFeatures(){
   var search=(g('search')?g('search').value:'').toLowerCase();
-  var src=currentFilter==='all'?features:features.filter(function(f){return f.status===currentFilter;});
+  var myName=currentUserName();
+  var src;
+  if(currentFilter==='mytasks'){
+    src=features.filter(function(f){return f.owner===myName||f.sprintAssignee===myName;});
+  } else if(currentFilter==='all'){
+    src=features;
+  } else {
+    src=features.filter(function(f){return f.status===currentFilter;});
+  }
   if(search)src=src.filter(function(f){return ((f.name||'')+(f.squad||'')+(f.team||'')+(f.owner||'')+(f.notes||'')).toLowerCase().indexOf(search)>=0;});
   var el=g('feat-list');
-  if(!src.length){el.innerHTML='<div class="empty">'+(features.length===0?'No features yet.<br><button class="btn pri sm" style="margin-top:8px" onclick="openAddFeature()">Add first feature</button>':'No features match this filter.')+'</div>';return;}
+  if(!src.length){
+    var emptyMsg=features.length===0?'No features yet.<br><button class="btn pri sm" style="margin-top:8px" onclick="openAddFeature()">Add first feature</button>'
+      :currentFilter==='mytasks'?'No tasks assigned to you yet.'
+      :'No features match this filter.';
+    el.innerHTML='<div class="empty">'+emptyMsg+'</div>';return;
+  }
   el.innerHTML=src.map(fHTML).join('');
 }
 function setFilter(s,btn){
@@ -1274,7 +1297,8 @@ function renderRoadmap(){
   features.forEach(function(f){if(!byQ[f.quarter])byQ[f.quarter]=[];byQ[f.quarter].push(f);});
   var el=g('roadmap');
   if(!Object.keys(byQ).length){el.innerHTML='<div class="empty">No roadmap data.</div>';return;}
-  el.innerHTML=Object.keys(byQ).map(function(q){
+  var sortedQKeys=sortQuarters(Object.keys(byQ).map(function(n){return{name:n};}).concat([])).map(function(o){return o.name;});
+  el.innerHTML=sortedQKeys.map(function(q){
     var items=byQ[q],isSel=selectedQuarters.indexOf(q)>=0;
     return '<div class="rmq"><div class="rmqh">'+esc(q)+' <span class="badge '+(isSel?'b-inprogress':'b-planned')+'" style="text-transform:none;letter-spacing:0">'+(isSel?'Selected':'Other')+'</span></div>'
       +items.map(function(f){
