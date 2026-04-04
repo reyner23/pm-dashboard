@@ -249,6 +249,27 @@ body{font-family:var(--font);background:var(--bg3);color:var(--text);font-size:1
 .sp-week-col.current-week .sp-week-title{color:var(--blue-text)}
 .spill-item{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border)}
 .spill-item:last-child{border-bottom:none}
+
+/* ── Workflow stages ── */
+.wf-tabs{display:flex;gap:0;margin-bottom:0;border-bottom:1px solid var(--border);overflow-x:auto}
+.wf-tab{padding:9px 14px;font-size:11px;font-weight:600;color:var(--text3);cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;transition:all .15s;user-select:none;display:flex;align-items:center;gap:5px}
+.wf-tab:hover{color:var(--text)}
+.wf-tab.active{color:var(--blue);border-bottom-color:var(--blue)}
+.wf-tab .wf-dot{width:6px;height:6px;border-radius:50%;background:var(--text3);flex-shrink:0}
+.wf-tab.done-tab .wf-dot{background:var(--green)}
+.wf-tab.active .wf-dot{background:var(--blue)}
+.wf-tab.warn-tab .wf-dot{background:var(--red)}
+.wf-panel{display:none;padding:14px 0 0}
+.wf-panel.active{display:block}
+.wf-stage-status{display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+.member-chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
+.member-chip{display:flex;align-items:center;gap:4px;background:var(--blue-bg);color:var(--blue-text);border-radius:10px;padding:2px 8px 2px 4px;font-size:11px;font-weight:500}
+.member-chip .chip-x{cursor:pointer;font-size:13px;line-height:1;color:var(--blue-text);opacity:.6;margin-left:1px}
+.member-chip .chip-x:hover{opacity:1}
+.chip-av{width:18px;height:18px;border-radius:50%;background:var(--blue);color:#fff;font-size:8px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.wf-link-row{display:flex;align-items:center;gap:7px}
+.wf-link-row a{font-size:11px;color:var(--blue-text)}
+.stage-summary{display:inline-flex;align-items:center;gap:4px;font-size:10px;padding:2px 7px;border-radius:8px;font-weight:600}
 </style>
 </head>
 <body>
@@ -333,9 +354,14 @@ body{font-family:var(--font);background:var(--bg3);color:var(--text);font-size:1
     <div class="q-selector" id="q-selector"></div>
     <div class="mrow" style="margin-top:14px">
       <div class="mc"><div class="mlbl">Total features</div><div class="mval" id="m-total">0</div><div class="msub" id="m-total-s"></div></div>
-      <div class="mc"><div class="mlbl">In progress</div><div class="mval" id="m-ip">0</div><div class="msub">Active work</div></div>
-      <div class="mc"><div class="mlbl">Completed</div><div class="mval up" id="m-done">0</div><div class="msub" id="m-done-s"></div></div>
-      <div class="mc"><div class="mlbl">Blocked</div><div class="mval dn" id="m-blocked">0</div><div class="msub" id="m-blk-s"></div></div>
+      <div class="mc"><div class="mlbl">In Development</div><div class="mval" id="m-ip">0</div><div class="msub">Active dev work</div></div>
+      <div class="mc"><div class="mlbl">Deployed</div><div class="mval up" id="m-done">0</div><div class="msub" id="m-done-s"></div></div>
+      <div class="mc"><div class="mlbl">Bugs Found</div><div class="mval dn" id="m-blocked">0</div><div class="msub" id="m-blk-s"></div></div>
+    </div>
+    <!-- Pipeline funnel row -->
+    <div class="card" style="padding:14px;margin-bottom:16px">
+      <div class="sec" style="margin-bottom:12px">Workflow pipeline <span style="font-size:10px;font-weight:400;color:var(--text3)">— features by stage</span></div>
+      <div id="d-pipeline" style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px"></div>
     </div>
     <div class="two-col">
       <div class="card"><div class="sec">Active features</div><div id="d-active"></div></div>
@@ -396,6 +422,7 @@ body{font-family:var(--font);background:var(--bg3);color:var(--text);font-size:1
       <div class="card"><div class="sec">Risks & blockers</div><div id="rpt-risk" style="font-size:13px;color:var(--text2);line-height:1.9"></div></div>
     </div>
     <div class="card"><div class="sec">Breakdown</div><div id="rpt-break"></div></div>
+    <div class="card" style="margin-top:0"><div class="sec">Feature pipeline status</div><div id="rpt-pipeline"></div></div>
   </div>
 
   <!-- SPRINT PLANNER -->
@@ -471,36 +498,173 @@ body{font-family:var(--font);background:var(--bg3);color:var(--text);font-size:1
 
 <!-- FEATURE MODAL -->
 <div class="overlay" id="fov" onclick="if(event.target===this)closeModal('fov')">
-<div class="modal">
+<div class="modal" style="width:660px;max-width:98vw">
   <div class="mtitle"><span id="ftitle">Add feature</span><button class="mclose" onclick="closeModal('fov')">×</button></div>
-  <div class="frow2">
+  <!-- Header info: name, quarter, priority, due -->
+  <div class="frow2" style="margin-bottom:10px">
     <div class="fr" style="grid-column:1/-1"><div class="flbl">Feature name *</div><input class="fi2" id="f-name" placeholder="e.g. Onboarding redesign"></div>
-    <div class="fr"><div class="flbl">Status</div>
-      <select class="fsel" id="f-status">
-        <option value="planned">Planned</option><option value="design">Design</option>
-        <option value="inprogress">In progress</option><option value="review">Review</option>
-        <option value="done">Done</option><option value="blocked">Blocked</option>
-      </select>
-    </div>
+    <div class="fr"><div class="flbl">Quarter</div><select class="fsel" id="f-quarter"></select></div>
     <div class="fr"><div class="flbl">Priority</div>
       <select class="fsel" id="f-priority"><option>High</option><option selected>Medium</option><option>Low</option></select>
     </div>
-    <div class="fr"><div class="flbl">Squad</div><select class="fsel" id="f-squad"><option value="">— select squad —</option></select></div>
-    <div class="fr"><div class="flbl">Owner</div><select class="fsel" id="f-owner"><option value="">— select member —</option></select></div>
-    <div class="fr"><div class="flbl">Quarter</div>
-      <select class="fsel" id="f-quarter"><option>Q1 2026</option><option selected>Q2 2026</option><option>Q3 2026</option><option>Q4 2026</option><option>Q1 2027</option></select>
-    </div>
     <div class="fr"><div class="flbl">Due date</div><input class="fi2" id="f-due" type="date" style="cursor:pointer"></div>
-    <div class="fr" style="grid-column:1/-1"><div class="flbl">Figma link</div><input class="fi2" id="f-figma" placeholder="https://www.figma.com/file/..." oninput="previewFigma()"><div class="fhint" id="fhint"></div></div>
-    <div class="fr" style="grid-column:1/-1"><div class="flbl">Notes / blockers</div><textarea class="fta" id="f-notes" placeholder="Context, blockers, dependencies..."></textarea></div>
+    <div class="fr"><div class="flbl">Overall status</div>
+      <select class="fsel" id="f-status">
+        <option value="planned">Planned</option><option value="inprogress">In progress</option>
+        <option value="review">Review</option><option value="done">Done</option><option value="blocked">Blocked</option>
+      </select>
+    </div>
   </div>
-  <div class="mfoot">
+
+  <!-- Workflow tabs -->
+  <div class="wf-tabs" id="wf-tabs">
+    <div class="wf-tab active" onclick="switchWfTab('planning',this)"><span class="wf-dot"></span>1. Planning</div>
+    <div class="wf-tab" onclick="switchWfTab('prd',this)"><span class="wf-dot"></span>2. PRD &amp; UI/UX</div>
+    <div class="wf-tab" onclick="switchWfTab('dev',this)"><span class="wf-dot"></span>3. Development</div>
+    <div class="wf-tab" onclick="switchWfTab('qa',this)"><span class="wf-dot"></span>4. QA</div>
+    <div class="wf-tab" onclick="switchWfTab('deploy',this)"><span class="wf-dot"></span>5. Deployment</div>
+  </div>
+
+  <!-- ── PLANNING ── -->
+  <div class="wf-panel active" id="wfp-planning">
+    <div class="frow2">
+      <div class="fr"><div class="flbl">Planning status</div>
+        <select class="fsel" id="wf-planning-status">
+          <option value="">— select —</option>
+          <option>Need Brainstorm</option><option>In Progress</option>
+          <option>Waiting for Approval</option><option>Approved</option><option>Skipped</option>
+        </select>
+      </div>
+      <div class="fr"><div class="flbl">Squad</div><select class="fsel" id="wf-planning-squad" onchange="refreshWfMembers('planning')"><option value="">— select —</option></select></div>
+      <div class="fr" style="grid-column:1/-1">
+        <div class="flbl">Team members</div>
+        <div style="display:flex;gap:7px;align-items:center">
+          <select class="fsel" id="wf-planning-member-sel" style="flex:1"><option value="">— add member —</option></select>
+          <button class="btn sm" onclick="addWfMember('planning')">Add</button>
+        </div>
+        <div class="member-chips" id="wf-planning-members"></div>
+      </div>
+      <div class="fr" style="grid-column:1/-1"><div class="flbl">Reference / idea source URL</div>
+        <input class="fi2" id="wf-planning-ref" placeholder="Google Slides, Notion, any URL...">
+        <div class="fhint" id="wf-planning-ref-hint"></div>
+      </div>
+      <div class="fr" style="grid-column:1/-1"><div class="flbl">Notes</div>
+        <textarea class="fta" id="wf-planning-notes" placeholder="Brainstorm notes, context, goals..."></textarea>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── PRD & UI/UX ── -->
+  <div class="wf-panel" id="wfp-prd">
+    <div class="frow2">
+      <div class="fr"><div class="flbl">PRD &amp; Design status</div>
+        <select class="fsel" id="wf-prd-status">
+          <option value="">— select —</option>
+          <option>Waiting</option><option>In Progress</option><option>Done</option>
+        </select>
+      </div>
+      <div class="fr"><div class="flbl">Squad</div><select class="fsel" id="wf-prd-squad" onchange="refreshWfMembers('prd')"><option value="">— select —</option></select></div>
+      <div class="fr" style="grid-column:1/-1">
+        <div class="flbl">Team members</div>
+        <div style="display:flex;gap:7px;align-items:center">
+          <select class="fsel" id="wf-prd-member-sel" style="flex:1"><option value="">— add member —</option></select>
+          <button class="btn sm" onclick="addWfMember('prd')">Add</button>
+        </div>
+        <div class="member-chips" id="wf-prd-members"></div>
+      </div>
+      <div class="fr" style="grid-column:1/-1"><div class="flbl">PRD document (Google Docs URL)</div>
+        <input class="fi2" id="wf-prd-doc" placeholder="https://docs.google.com/...">
+        <div class="fhint" id="wf-prd-doc-hint"></div>
+      </div>
+      <div class="fr" style="grid-column:1/-1"><div class="flbl">Figma design URL</div>
+        <input class="fi2" id="wf-prd-figma" placeholder="https://www.figma.com/file/..." oninput="previewWfFigma()">
+        <div class="fhint" id="wf-prd-figma-hint"></div>
+      </div>
+      <div class="fr" style="grid-column:1/-1"><div class="flbl">Notes</div>
+        <textarea class="fta" id="wf-prd-notes" placeholder="Design decisions, open questions..."></textarea>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── DEVELOPMENT ── -->
+  <div class="wf-panel" id="wfp-dev">
+    <div class="frow2">
+      <div class="fr"><div class="flbl">Dev status</div>
+        <select class="fsel" id="wf-dev-status">
+          <option value="">— select —</option>
+          <option>Waiting</option><option>In Progress</option><option>On Hold</option><option>Done</option>
+        </select>
+      </div>
+      <div class="fr"><div class="flbl">Squad</div><select class="fsel" id="wf-dev-squad" onchange="refreshWfMembers('dev')"><option value="">— select —</option></select></div>
+      <div class="fr" style="grid-column:1/-1">
+        <div class="flbl">Team members</div>
+        <div style="display:flex;gap:7px;align-items:center">
+          <select class="fsel" id="wf-dev-member-sel" style="flex:1"><option value="">— add member —</option></select>
+          <button class="btn sm" onclick="addWfMember('dev')">Add</button>
+        </div>
+        <div class="member-chips" id="wf-dev-members"></div>
+      </div>
+      <div class="fr" style="grid-column:1/-1"><div class="flbl">Dev remark (filled by Dev team)</div>
+        <textarea class="fta" id="wf-dev-remark" placeholder="Technical notes, blockers, implementation details..."></textarea>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── QA ── -->
+  <div class="wf-panel" id="wfp-qa">
+    <div class="frow2">
+      <div class="fr"><div class="flbl">QA status</div>
+        <select class="fsel" id="wf-qa-status">
+          <option value="">— select —</option>
+          <option>Waiting</option><option>Checking in Progress</option><option>Bug Found</option><option>QC Passed</option>
+        </select>
+      </div>
+      <div class="fr"><div class="flbl">Squad</div><select class="fsel" id="wf-qa-squad" onchange="refreshWfMembers('qa')"><option value="">— select —</option></select></div>
+      <div class="fr" style="grid-column:1/-1">
+        <div class="flbl">Team members</div>
+        <div style="display:flex;gap:7px;align-items:center">
+          <select class="fsel" id="wf-qa-member-sel" style="flex:1"><option value="">— add member —</option></select>
+          <button class="btn sm" onclick="addWfMember('qa')">Add</button>
+        </div>
+        <div class="member-chips" id="wf-qa-members"></div>
+      </div>
+      <div class="fr" style="grid-column:1/-1"><div class="flbl">QA checking result / remarks</div>
+        <textarea class="fta" id="wf-qa-remark" placeholder="Test results, bugs found, pass/fail notes..."></textarea>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── DEPLOYMENT ── -->
+  <div class="wf-panel" id="wfp-deploy">
+    <div class="frow2">
+      <div class="fr"><div class="flbl">Deployment status</div>
+        <select class="fsel" id="wf-deploy-status">
+          <option value="">— select —</option>
+          <option>Waiting</option><option>Need Improvement</option><option>In Progress</option><option>Done Deployment</option>
+        </select>
+      </div>
+      <div class="fr"><div class="flbl">Squad</div><select class="fsel" id="wf-deploy-squad" onchange="refreshWfMembers('deploy')"><option value="">— select —</option></select></div>
+      <div class="fr" style="grid-column:1/-1">
+        <div class="flbl">Team members</div>
+        <div style="display:flex;gap:7px;align-items:center">
+          <select class="fsel" id="wf-deploy-member-sel" style="flex:1"><option value="">— add member —</option></select>
+          <button class="btn sm" onclick="addWfMember('deploy')">Add</button>
+        </div>
+        <div class="member-chips" id="wf-deploy-members"></div>
+      </div>
+      <div class="fr" style="grid-column:1/-1"><div class="flbl">Deployment remark</div>
+        <textarea class="fta" id="wf-deploy-remark" placeholder="Deployment notes, environment, rollback plan..."></textarea>
+      </div>
+    </div>
+  </div>
+
+  <div class="mfoot" style="margin-top:14px">
     <div><button class="btn danger sm" id="fdel-btn" onclick="initiateDeleteFeature()" style="display:none">Delete</button></div>
     <div style="display:flex;gap:7px"><button class="btn sm" onclick="closeModal('fov')">Cancel</button><button class="btn pri sm" onclick="saveFeature()">Save</button></div>
   </div>
   <div class="delconfirm" id="fdel">
     <div style="font-size:12px;color:var(--red-text);margin-bottom:8px">Delete this feature? Cannot be undone.</div>
-    <div style="display:flex;gap:7px"><button class="btn danger sm" onclick="deleteFeature()">Yes, delete</button><button class="btn sm" onclick="hideDel('fdel')">Cancel</button></div>
+    <div style="display:flex;gap:7px"><button class="btn danger sm" onclick="confirmDeleteFeature()">Yes, delete</button><button class="btn sm" onclick="hideDel('fdel')">Cancel</button></div>
   </div>
   <div id="f-history"></div>
 </div>
@@ -862,30 +1026,68 @@ function saveFeature() {
   var history = existing ? (existing.history||[]) : [];
   if (existing) {
     var changes=[];
-    var chk={name:'Name',status:'Status',priority:'Priority',notes:'Notes'};
-    Object.keys(chk).forEach(function(key){
-      var ov=existing[key]||'', nv=g('f-'+key)?g('f-'+key).value.trim():'';
-      if(ov!==nv) changes.push(chk[key]+': "'+ov+'" \u2192 "'+nv+'"');
-    });
-    var os=existing.squad||'',ns=g('f-squad').value; if(os!==ns) changes.push('Squad: "'+os+'" \u2192 "'+ns+'"');
-    var oo=existing.owner||'',no=g('f-owner').value; if(oo!==no) changes.push('Owner: "'+oo+'" \u2192 "'+no+'"');
-    var od=existing.due||'',nd=rawDue?fmtDate(rawDue):''; if(od!==nd) changes.push('Due: "'+od+'" \u2192 "'+nd+'"');
-    var oq=existing.quarter||'',nq=g('f-quarter').value; if(oq!==nq) changes.push('Quarter: "'+oq+'" \u2192 "'+nq+'"');
+    if((existing.name||'')!==name) changes.push('Name: "'+existing.name+'" → "'+name+'"');
+    var ns=g('f-status').value; if((existing.status||'')!==ns) changes.push('Status: "'+existing.status+'" → "'+ns+'"');
+    var np=g('f-priority').value; if((existing.priority||'')!==np) changes.push('Priority: "'+existing.priority+'" → "'+np+'"');
+    var nq=g('f-quarter').value; if((existing.quarter||'')!==nq) changes.push('Quarter: "'+existing.quarter+'" → "'+nq+'"');
     if(changes.length) history.push({at:now, by:userName, changes:changes});
   }
+
+  // Collect workflow data
+  var wf = {
+    planning: {
+      status:  g('wf-planning-status').value,
+      squad:   g('wf-planning-squad').value,
+      members: wfMembers.planning.slice(),
+      ref:     g('wf-planning-ref').value.trim(),
+      notes:   g('wf-planning-notes').value.trim()
+    },
+    prd: {
+      status:  g('wf-prd-status').value,
+      squad:   g('wf-prd-squad').value,
+      members: wfMembers.prd.slice(),
+      doc:     g('wf-prd-doc').value.trim(),
+      figma:   g('wf-prd-figma').value.trim(),
+      notes:   g('wf-prd-notes').value.trim()
+    },
+    dev: {
+      status:  g('wf-dev-status').value,
+      squad:   g('wf-dev-squad').value,
+      members: wfMembers.dev.slice(),
+      remark:  g('wf-dev-remark').value.trim()
+    },
+    qa: {
+      status:  g('wf-qa-status').value,
+      squad:   g('wf-qa-squad').value,
+      members: wfMembers.qa.slice(),
+      remark:  g('wf-qa-remark').value.trim()
+    },
+    deploy: {
+      status:  g('wf-deploy-status').value,
+      squad:   g('wf-deploy-squad').value,
+      members: wfMembers.deploy.slice(),
+      remark:  g('wf-deploy-remark').value.trim()
+    }
+  };
+
+  // Derive legacy fields for backward compat with sprint/roadmap
+  var allMembers=[].concat(wf.planning.members,wf.prd.members,wf.dev.members,wf.qa.members,wf.deploy.members);
+  var primarySquad=wf.dev.squad||wf.planning.squad||wf.prd.squad||'';
+  var primaryOwner=allMembers[0]||'';
 
   var f = {
     id:        editFId||uid(),
     name:      name,
-    squad:     g('f-squad').value,
-    owner:     g('f-owner').value,
     status:    g('f-status').value,
     priority:  g('f-priority').value,
     quarter:   g('f-quarter').value,
     due:       rawDue?fmtDate(rawDue):'',
     dueRaw:    rawDue,
-    figma:     g('f-figma').value.trim(),
-    notes:     g('f-notes').value.trim(),
+    squad:     primarySquad,
+    owner:     primaryOwner,
+    figma:     wf.prd.figma||'',
+    notes:     wf.planning.notes||'',
+    workflow:  wf,
     updatedAt: now,
     updatedBy: userName,
     history:   history
@@ -895,7 +1097,6 @@ function saveFeature() {
     f.createdBy = userName;
     f.history = [];
   } else {
-    // Preserve sprint assignment — never wipe it on edit
     var prev = features.filter(function(x){return x.id===editFId;})[0];
     if (prev) {
       if (prev.sprintWeek)     f.sprintWeek     = prev.sprintWeek;
@@ -906,41 +1107,162 @@ function saveFeature() {
 
   closeModal('fov');
   fbSet('features', f.id, f, function(){
-    toast((editFId?'Feature updated':'Feature added')+' \u2713');
+    toast((editFId?'Feature updated':'Feature added')+' ✓');
   });
 }
 
-// Show confirm modal before deleting
-function initiateDeleteFeature() {
-  if (!editFId) return;
-  var f = features.filter(function(x){return x.id===editFId;})[0];
-  if (!f) return;
-  pendingDeleteId = editFId;
-  g('dc-name').textContent = f.name;
-  closeModal('fov');
-  g('dcov').classList.add('open');
+// ── Workflow tab state ──
+var wfMembers = { planning:[], prd:[], dev:[], qa:[], deploy:[] };
+
+function switchWfTab(stage, tabEl) {
+  document.querySelectorAll('.wf-tab').forEach(function(t){t.classList.remove('active');});
+  document.querySelectorAll('.wf-panel').forEach(function(p){p.classList.remove('active');});
+  tabEl.classList.add('active');
+  g('wfp-'+stage).classList.add('active');
 }
 
-function confirmDeleteFeature() {
-  if (!pendingDeleteId) return;
-  var f = features.filter(function(x){return x.id===pendingDeleteId;})[0];
-  if (!f) { closeModal('dcov'); return; }
-
-  // Archive to deleted collection with who deleted it
-  var archived = Object.assign({}, f, {
-    deletedAt: Date.now(),
-    deletedBy: currentUserName()
+function refreshAllWfSquadDropdowns() {
+  var stages=['planning','prd','dev','qa','deploy'];
+  stages.forEach(function(s){
+    var el=g('wf-'+s+'-squad');
+    if(!el)return;
+    var cur=el.value;
+    el.innerHTML='<option value="">— select —</option>'+squads.map(function(sq){
+      return '<option value="'+esc(sq.name)+'">'+esc(sq.name)+'</option>';
+    }).join('');
+    if(cur)el.value=cur;
+    refreshWfMembers(s);
   });
-  db.collection('deleted').doc(f.id).set(archived)
-    .then(function(){
-      return db.collection('features').doc(f.id).delete();
-    })
-    .then(function(){
-      closeModal('dcov');
-      pendingDeleteId = null;
-      toast('Feature deleted and archived');
-    })
-    .catch(function(e){ toast('Delete failed: '+e.message); });
+}
+
+function refreshWfMembers(stage) {
+  var squadSel=g('wf-'+stage+'-squad');
+  var memberSel=g('wf-'+stage+'-member-sel');
+  if(!memberSel)return;
+  var squadVal=squadSel?squadSel.value:'';
+  var filtered=squadVal?members.filter(function(m){return m.squad===squadVal;}):members;
+  memberSel.innerHTML='<option value="">— add member —</option>'+filtered.map(function(m){
+    return '<option value="'+esc(m.name)+'">'+esc(m.name)+(m.squad&&!squadVal?' ('+esc(m.squad)+')':'')+'</option>';
+  }).join('');
+}
+
+function addWfMember(stage) {
+  var sel=g('wf-'+stage+'-member-sel');
+  var name=sel.value; if(!name)return;
+  if(wfMembers[stage].indexOf(name)>=0){toast(name+' already added');return;}
+  wfMembers[stage].push(name);
+  renderWfChips(stage);
+  sel.value='';
+}
+
+function removeWfMember(stage, name) {
+  wfMembers[stage]=wfMembers[stage].filter(function(n){return n!==name;});
+  renderWfChips(stage);
+}
+
+function renderWfChips(stage) {
+  var el=g('wf-'+stage+'-members');
+  if(!el)return;
+  if(!wfMembers[stage].length){el.innerHTML='';return;}
+  el.innerHTML=wfMembers[stage].map(function(name){
+    var init=name.split(' ').map(function(w){return w[0];}).join('').substring(0,2).toUpperCase();
+    return '<span class="member-chip">'
+      +'<span class="chip-av">'+init+'</span>'
+      +esc(name)
+      +'<span class="chip-x" onclick="removeWfMember(\''+stage+'\',\''+esc(name)+'\')">×</span>'
+      +'</span>';
+  }).join('');
+}
+
+function previewWfFigma() {
+  var url=g('wf-prd-figma').value.trim(), hint=g('wf-prd-figma-hint');
+  if(!hint)return;
+  if(url.indexOf('figma.com')>=0) hint.innerHTML='<a href="'+url+'" target="_blank" style="color:var(--purple)">Preview ↗</a>';
+  else if(url) hint.textContent='URL saved'; else hint.textContent='';
+}
+
+function previewWfRef() {
+  var url=g('wf-planning-ref').value.trim(), hint=g('wf-planning-ref-hint');
+  if(!hint)return;
+  if(url) hint.innerHTML='<a href="'+url+'" target="_blank" style="color:var(--blue-text)">Open ↗</a>';
+  else hint.textContent='';
+}
+
+function loadWfIntoModal(f) {
+  var wf=f.workflow||{};
+  var stages=['planning','prd','dev','qa','deploy'];
+  stages.forEach(function(s){
+    wfMembers[s]=(wf[s]&&wf[s].members)?wf[s].members.slice():[];
+    var squad=wf[s]&&wf[s].squad?wf[s].squad:'';
+    var status=wf[s]&&wf[s].status?wf[s].status:'';
+    if(g('wf-'+s+'-squad'))g('wf-'+s+'-squad').value=squad;
+    if(g('wf-'+s+'-status'))g('wf-'+s+'-status').value=status;
+    refreshWfMembers(s);
+    renderWfChips(s);
+  });
+  if(g('wf-planning-ref'))g('wf-planning-ref').value=(wf.planning&&wf.planning.ref)||'';
+  if(g('wf-planning-notes'))g('wf-planning-notes').value=(wf.planning&&wf.planning.notes)||'';
+  if(g('wf-prd-doc'))g('wf-prd-doc').value=(wf.prd&&wf.prd.doc)||'';
+  if(g('wf-prd-figma'))g('wf-prd-figma').value=(wf.prd&&wf.prd.figma)||f.figma||'';
+  if(g('wf-prd-notes'))g('wf-prd-notes').value=(wf.prd&&wf.prd.notes)||'';
+  if(g('wf-dev-remark'))g('wf-dev-remark').value=(wf.dev&&wf.dev.remark)||'';
+  if(g('wf-qa-remark'))g('wf-qa-remark').value=(wf.qa&&wf.qa.remark)||'';
+  if(g('wf-deploy-remark'))g('wf-deploy-remark').value=(wf.deploy&&wf.deploy.remark)||'';
+  // Reset to first tab
+  document.querySelectorAll('.wf-tab').forEach(function(t,i){t.classList.toggle('active',i===0);});
+  document.querySelectorAll('.wf-panel').forEach(function(p,i){p.classList.toggle('active',i===0);});
+  updateWfTabDots(f);
+}
+
+function resetWfModal() {
+  var stages=['planning','prd','dev','qa','deploy'];
+  stages.forEach(function(s){
+    wfMembers[s]=[];
+    if(g('wf-'+s+'-squad'))g('wf-'+s+'-squad').value='';
+    if(g('wf-'+s+'-status'))g('wf-'+s+'-status').value='';
+    renderWfChips(s);
+  });
+  if(g('wf-planning-ref'))g('wf-planning-ref').value='';
+  if(g('wf-planning-notes'))g('wf-planning-notes').value='';
+  if(g('wf-prd-doc'))g('wf-prd-doc').value='';
+  if(g('wf-prd-figma'))g('wf-prd-figma').value='';
+  if(g('wf-prd-notes'))g('wf-prd-notes').value='';
+  if(g('wf-dev-remark'))g('wf-dev-remark').value='';
+  if(g('wf-qa-remark'))g('wf-qa-remark').value='';
+  if(g('wf-deploy-remark'))g('wf-deploy-remark').value='';
+  document.querySelectorAll('.wf-tab').forEach(function(t,i){
+    t.classList.toggle('active',i===0);
+    t.classList.remove('done-tab','warn-tab');
+    t.querySelector('.wf-dot').style.background='';
+  });
+  document.querySelectorAll('.wf-panel').forEach(function(p,i){p.classList.toggle('active',i===0);});
+}
+
+function updateWfTabDots(f) {
+  var wf=f.workflow||{};
+  var stages=['planning','prd','dev','qa','deploy'];
+  var doneStatuses={
+    planning:['Approved'],
+    prd:['Done'],
+    dev:['Done'],
+    qa:['QC Passed'],
+    deploy:['Done Deployment']
+  };
+  var warnStatuses={
+    planning:['Skipped'],
+    prd:[],
+    dev:['On Hold'],
+    qa:['Bug Found'],
+    deploy:['Need Improvement']
+  };
+  var tabs=document.querySelectorAll('.wf-tab');
+  stages.forEach(function(s,i){
+    if(!tabs[i])return;
+    var st=(wf[s]&&wf[s].status)||'';
+    tabs[i].classList.remove('done-tab','warn-tab');
+    if(doneStatuses[s].indexOf(st)>=0) tabs[i].classList.add('done-tab');
+    else if(warnStatuses[s].indexOf(st)>=0) tabs[i].classList.add('warn-tab');
+  });
 }
 
 function fmtDate(iso) {
@@ -1117,12 +1439,13 @@ function countdownHTML(dueRaw){
 function openAddFeature(){
   editFId=null; g('ftitle').textContent='Add feature';
   g('fdel-btn').style.display='none'; hideDel('fdel');
-  g('f-name').value='';g('f-figma').value='';g('f-notes').value='';g('f-due').value='';
+  g('f-name').value='';g('f-due').value='';
   g('f-status').value='planned';g('f-priority').value='Medium';
-  g('fhint').textContent='';g('f-history').innerHTML='';
+  g('f-history').innerHTML='';
   refreshFeatureQuarterDropdown();
   if(selectedQuarters.length)g('f-quarter').value=selectedQuarters[0];
-  refreshDropdowns();g('f-squad').value='';g('f-owner').value='';
+  refreshAllWfSquadDropdowns();
+  resetWfModal();
   g('fov').classList.add('open');
   setTimeout(function(){g('f-name').focus();},100);
 }
@@ -1132,16 +1455,16 @@ function openEditFeature(id){
   g('fdel-btn').style.display='block';hideDel('fdel');
   g('f-name').value=f.name||'';g('f-status').value=f.status||'planned';
   g('f-priority').value=f.priority||'Medium';g('f-due').value=f.dueRaw||'';
-  g('f-figma').value=f.figma||'';g('f-notes').value=f.notes||'';
-  previewFigma();refreshFeatureQuarterDropdown();g('f-quarter').value=f.quarter||'';
-  refreshDropdowns();g('f-squad').value=f.squad||'';g('f-owner').value=f.owner||'';
+  refreshFeatureQuarterDropdown();g('f-quarter').value=f.quarter||'';
+  refreshAllWfSquadDropdowns();
+  loadWfIntoModal(f);
   var hist=f.history||[],hEl=g('f-history');
   if(hist.length){
     var rows=hist.slice().reverse().map(function(h){
       var dt=new Date(h.at).toLocaleString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
       return '<div style="font-size:11px;background:var(--bg2);border-radius:6px;padding:7px 9px;border:1px solid var(--border);margin-bottom:5px">'
-        +'<div style="color:var(--text3);margin-bottom:3px">'+dt+' \u00b7 <strong>'+esc(h.by||'?')+'</strong></div>'
-        +'<div style="color:var(--text2);line-height:1.6">'+h.changes.map(function(c){return '\u00b7 '+esc(c);}).join('<br>')+'</div></div>';
+        +'<div style="color:var(--text3);margin-bottom:3px">'+dt+' · <strong>'+esc(h.by||'?')+'</strong></div>'
+        +'<div style="color:var(--text2);line-height:1.6">'+h.changes.map(function(c){return '· '+esc(c);}).join('<br>')+'</div></div>';
     }).join('');
     hEl.innerHTML='<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">'
       +'<div style="font-size:11px;font-weight:600;color:var(--text2);margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em">Edit history</div>'
@@ -1192,43 +1515,73 @@ function openEditSquad(id){
 function closeModal(id){g(id).classList.remove('open');}
 function showDel(id){g(id).classList.add('show');}
 function hideDel(id){g(id).classList.remove('show');}
-function previewFigma(){
-  var url=g('f-figma').value.trim(),hint=g('fhint');
-  if(url.indexOf('figma.com')>=0)hint.innerHTML='<a href="'+url+'" target="_blank" style="color:var(--purple)">Preview \u2197</a>';
-  else if(url)hint.textContent='URL saved as-is';else hint.textContent='';
-}
+// previewFigma removed — now handled per workflow stage
+
 function refreshSquadSel(){
   g('m-squad').innerHTML='<option value="">\u2014 select \u2014</option>'+squads.map(function(s){return '<option value="'+esc(s.name)+'">'+esc(s.name)+'</option>';}).join('');
 }
 function refreshDropdowns(){
-  var sq=g('f-squad');
-  if(sq){var c=sq.value;sq.innerHTML='<option value="">\u2014 select squad \u2014</option>'+squads.map(function(s){return '<option value="'+esc(s.name)+'">'+esc(s.name)+'</option>';}).join('');if(c)sq.value=c;}
-  var ow=g('f-owner');
-  if(ow){var c2=ow.value;ow.innerHTML='<option value="">\u2014 select member \u2014</option>'+members.map(function(m){return '<option value="'+esc(m.name)+'">'+esc(m.name)+' ('+esc(m.squad||'')+')</option>';}).join('');if(c2)ow.value=c2;}
   refreshSquadSel();
+  refreshAllWfSquadDropdowns();
 }
 
 // ── Render ──
 function renderAll(){
-  renderMetrics();renderDashActive();renderDashProgress();renderDashDeadlines();
+  renderMetrics();renderDashPipeline();renderDashActive();renderDashProgress();renderDashDeadlines();
   renderFeatures();renderRoadmap();renderTeam();renderReport();renderSprint();
   g('nb-count').textContent=features.length;
   refreshDropdowns();refreshQuarterSelectors();
 }
+function renderDashPipeline(){
+  var src=getSelectedFeatures();
+  var el=g('d-pipeline'); if(!el)return;
+  var stages=[
+    {key:'planning',label:'Planning',icon:'💡',done:'Approved',active:['In Progress','Waiting for Approval','Need Brainstorm'],warn:'Skipped',color:'var(--purple)'},
+    {key:'prd',     label:'PRD & UI/UX',icon:'📐',done:'Done',active:['In Progress'],warn:'Waiting',color:'var(--blue)'},
+    {key:'dev',     label:'Development',icon:'⚙️',done:'Done',active:['In Progress'],warn:'On Hold',color:'var(--amber)'},
+    {key:'qa',      label:'QA',icon:'🔍',done:'QC Passed',active:['Checking in Progress'],warn:'Bug Found',color:'var(--red)'},
+    {key:'deploy',  label:'Deployment',icon:'🚀',done:'Done Deployment',active:['In Progress'],warn:'Need Improvement',color:'var(--green)'}
+  ];
+  el.innerHTML=stages.map(function(s){
+    var doneCount=src.filter(function(f){return getWfStageStatus(f,s.key)===s.done;}).length;
+    var activeCount=src.filter(function(f){return s.active.indexOf(getWfStageStatus(f,s.key))>=0;}).length;
+    var warnCount=src.filter(function(f){return getWfStageStatus(f,s.key)===s.warn;}).length;
+    var pct=src.length?Math.round(doneCount/src.length*100):0;
+    return '<div style="background:var(--bg2);border-radius:var(--r);padding:11px 12px;border:1px solid var(--border);cursor:pointer" onclick="go(\'features\')">'
+      +'<div style="font-size:14px;margin-bottom:5px">'+s.icon+'</div>'
+      +'<div style="font-size:11px;font-weight:600;color:var(--text);margin-bottom:6px">'+s.label+'</div>'
+      +'<div style="font-size:20px;font-weight:700;color:var(--text);line-height:1;margin-bottom:2px">'+doneCount+'<span style="font-size:11px;font-weight:400;color:var(--text3)"> / '+src.length+'</span></div>'
+      +'<div style="font-size:10px;color:var(--text3);margin-bottom:6px">done · '+pct+'%</div>'
+      +'<div class="pbar" style="margin-bottom:6px"><div class="pfill" style="width:'+pct+'%;background:'+s.color+'"></div></div>'
+      +(activeCount?'<div style="font-size:10px;color:var(--blue-text)">'+activeCount+' in progress</div>':'')
+      +(warnCount?'<div style="font-size:10px;color:var(--red-text)">'+warnCount+' '+esc(s.warn.toLowerCase())+'</div>':'')
+      +'</div>';
+  }).join('');
+}
+function getWfStageStatus(f, stage) {
+  return (f.workflow&&f.workflow[stage]&&f.workflow[stage].status)||'';
+}
 function renderMetrics(){
   var src=getSelectedFeatures();
-  var done=src.filter(function(f){return f.status==='done';}).length;
-  var bl=src.filter(function(f){return f.status==='blocked';}).length;
-  var ip=src.filter(function(f){return f.status==='inprogress';}).length;
-  g('m-total').textContent=src.length;g('m-ip').textContent=ip;
-  g('m-done').textContent=done;g('m-blocked').textContent=bl;
+  var deployed=src.filter(function(f){return getWfStageStatus(f,'deploy')==='Done Deployment';}).length;
+  var inDev=src.filter(function(f){var s=getWfStageStatus(f,'dev');return s==='In Progress'||s==='On Hold';}).length;
+  var bugFound=src.filter(function(f){return getWfStageStatus(f,'qa')==='Bug Found';}).length;
+  var approved=src.filter(function(f){return getWfStageStatus(f,'planning')==='Approved';}).length;
+  g('m-total').textContent=src.length;
+  g('m-ip').textContent=inDev;
+  g('m-done').textContent=deployed;
+  g('m-blocked').textContent=bugFound;
   g('m-total-s').textContent='';
-  g('m-done-s').textContent=done>0?Math.round(done/src.length*100)+'% complete':'None yet';
-  g('m-blk-s').textContent=bl>0?'Needs attention':'All clear';
+  g('m-done-s').textContent=deployed>0?Math.round(deployed/src.length*100)+'% deployed':'None deployed';
+  g('m-blk-s').textContent=bugFound>0?bugFound+' bug(s) found':'QA all clear';
 }
 function renderDashActive(){
   var src=getSelectedFeatures();
-  var active=src.filter(function(f){return ['inprogress','review','blocked','design'].indexOf(f.status)>=0;}).slice(0,6);
+  // Active = features not yet fully deployed and not skipped
+  var active=src.filter(function(f){
+    var ds=getWfStageStatus(f,'deploy');
+    return ds!=='Done Deployment';
+  }).slice(0,6);
   var el=g('d-active');
   if(!active.length){el.innerHTML='<div class="empty">No active features.<br><button class="btn pri sm" style="margin-top:8px" onclick="openAddFeature()">Add first feature</button></div>';return;}
   el.innerHTML=active.map(fHTML).join('');
@@ -1247,7 +1600,24 @@ function renderDashProgress(){
     var items=groups[team]||[];
     var sq=squads.filter(function(s){return s.name===team;})[0];
     var barColor=sq?(SQUAD_C[sq.color]||SQUAD_C.blue).dot:cols[i%cols.length];
-    var pct=items.length?Math.round((items.filter(function(f){return f.status==='done';}).length+items.filter(function(f){return f.status==='review';}).length*0.75+items.filter(function(f){return f.status==='inprogress';}).length*0.5)/items.length*100):0;
+    // Progress = weighted avg of all 5 workflow stage completions per feature
+    var pct=0;
+    if(items.length){
+      var totalPts=0;
+      items.forEach(function(f){
+        var wf=f.workflow||{};
+        var pts=0;
+        if(getWfStageStatus(f,'planning')==='Approved'||getWfStageStatus(f,'planning')==='Skipped') pts+=1;
+        if(getWfStageStatus(f,'prd')==='Done') pts+=1;
+        var ds=getWfStageStatus(f,'dev');
+        if(ds==='Done') pts+=1; else if(ds==='In Progress') pts+=0.5; else if(ds==='On Hold') pts+=0.25;
+        var qs=getWfStageStatus(f,'qa');
+        if(qs==='QC Passed') pts+=1; else if(qs==='Checking in Progress') pts+=0.5; else if(qs==='Bug Found') pts+=0.25;
+        if(getWfStageStatus(f,'deploy')==='Done Deployment') pts+=1; else if(getWfStageStatus(f,'deploy')==='In Progress') pts+=0.5;
+        totalPts+=pts/5;
+      });
+      pct=Math.round(totalPts/items.length*100);
+    }
     var countLabel=items.length+' feature'+(items.length===1?'':'s');
     html+='<div style="margin-bottom:12px"><div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-size:12px;color:var(--text2)">'+esc(team)+'</span><span style="font-size:12px;font-weight:500">'+pct+'% <span style="font-size:10px;color:var(--text3);font-weight:400">('+countLabel+')</span></span></div><div class="pbar"><div class="pfill" style="width:'+pct+'%;background:'+barColor+'"></div></div></div>';
     i++;
@@ -1266,46 +1636,68 @@ function renderDashDeadlines(){
       +'</div>';
   }).join('');
 }
+function wfStageBadge(f) {
+  if(!f.workflow)return'';
+  var wf=f.workflow;
+  var stages=[
+    {key:'planning',label:'Plan',done:'Approved',warn:'Skipped'},
+    {key:'prd',label:'PRD',done:'Done',warn:''},
+    {key:'dev',label:'Dev',done:'Done',warn:'On Hold'},
+    {key:'qa',label:'QA',done:'QC Passed',warn:'Bug Found'},
+    {key:'deploy',label:'Deploy',done:'Done Deployment',warn:'Need Improvement'}
+  ];
+  return stages.map(function(s){
+    var st=(wf[s.key]&&wf[s.key].status)||'';
+    var color='var(--bg3)';var tc='var(--text3)';
+    if(st===s.done){color='var(--green-bg)';tc='var(--green-text)';}
+    else if(s.warn&&st===s.warn){color='var(--red-bg)';tc='var(--red-text)';}
+    else if(st&&st!=='Waiting'){color='var(--blue-bg)';tc='var(--blue-text)';}
+    return '<span style="font-size:9px;padding:1px 6px;border-radius:6px;background:'+color+';color:'+tc+';font-weight:600">'+s.label+'</span>';
+  }).join('');
+}
 function fHTML(f){
-  var figma=f.figma?'<a href="'+f.figma+'" target="_blank" class="figma-btn" onclick="event.stopPropagation()">Figma \u2197</a>':'';
+  var wf=f.workflow||{};
+  var figma=wf.prd&&wf.prd.figma?'<a href="'+wf.prd.figma+'" target="_blank" class="figma-btn" onclick="event.stopPropagation()">Figma ↗</a>'
+    :(f.figma?'<a href="'+f.figma+'" target="_blank" class="figma-btn" onclick="event.stopPropagation()">Figma ↗</a>':'');
   var qb=f.quarter?'<span style="font-size:9px;padding:1px 6px;border-radius:8px;background:var(--bg3);color:var(--text3)">'+esc(f.quarter)+'</span>':'';
   var status=f.status||'planned',priority=f.priority||'Medium';
-  var byLine=f.updatedBy?'<span style="font-size:9px;color:var(--text3)">\u00b7 '+esc(f.updatedBy)+'</span>':'';
+  var byLine=f.updatedBy?'<span style="font-size:9px;color:var(--text3)">· '+esc(f.updatedBy)+'</span>':'';
+  // Collect all assigned members across stages
+  var allM=[];
+  ['planning','prd','dev','qa','deploy'].forEach(function(s){if(wf[s]&&wf[s].members)wf[s].members.forEach(function(m){if(allM.indexOf(m)<0)allM.push(m);});});
+  var membersStr=allM.slice(0,3).map(function(m){return esc(m);}).join(', ')+(allM.length>3?' +more':'');
   return '<div class="fi" data-id="'+f.id+'" onclick="openEditFeature(this.dataset.id)">'
     +'<div class="dot-'+status+'"></div>'
     +'<div class="fi-info">'
     +'<div class="fi-name">'+esc(f.name)+'</div>'
-    +'<div class="fi-meta" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">'
-    +'<span>'+esc(f.squad||f.team||'')+(f.owner?' \u00b7 '+esc(f.owner):'')+'</span>'
-    +countdownHTML(f.dueRaw)+byLine
-    +'</div></div>'
+    +'<div class="fi-meta" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:3px">'
+    +wfStageBadge(f)
+    +'</div>'
+    +'<div class="fi-meta" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:2px">'
+    +(membersStr?'<span>'+membersStr+'</span>':'')+countdownHTML(f.dueRaw)+byLine
+    +'</div>'
+    +'</div>'
     +'<div class="fi-actions">'+qb+figma
     +'<span class="badge b-'+status+'">'+(LABELS[status]||status)+'</span>'
     +'<span class="badge pri-'+priority+'" style="font-size:9px">'+priority+'</span>'
     +'</div></div>';
 }
-function getMyNames(){
-  // Returns array of all names that belong to the logged-in user.
-  // Matches: display name from users collection + any member record with matching email.
-  var names=[];
-  var myName=currentUserName(); if(myName&&myName!=='Unknown') names.push(myName);
-  var myEmail=currentUser?currentUser.email:'';
-  if(myEmail){
-    members.forEach(function(m){
-      if((m.email||'').toLowerCase().trim()===(myEmail||'').toLowerCase().trim()){
-        if(names.indexOf(m.name)<0) names.push(m.name);
-      }
-    });
-  }
-  return names;
-}
+
 function renderFeatures(){
   var search=(g('search')?g('search').value:'').toLowerCase();
   var src;
   if(currentFilter==='mytasks'){
     var myNames=getMyNames();
     src=features.filter(function(f){
-      return myNames.indexOf(f.owner)>=0||myNames.indexOf(f.sprintAssignee)>=0;
+      if(myNames.indexOf(f.owner)>=0||myNames.indexOf(f.sprintAssignee)>=0)return true;
+      // Also check workflow members across all stages
+      var wf=f.workflow||{};
+      var stages=['planning','prd','dev','qa','deploy'];
+      for(var si=0;si<stages.length;si++){
+        var sm=wf[stages[si]]&&wf[stages[si]].members||[];
+        for(var mi=0;mi<sm.length;mi++){if(myNames.indexOf(sm[mi])>=0)return true;}
+      }
+      return false;
     });
   } else if(currentFilter==='all'){
     src=features;
@@ -1380,13 +1772,113 @@ function memberRowHTML(m){
 function renderReport(){
   var src=getSelectedFeatures();
   var qLabel=selectedQuarters.length===1?selectedQuarters[0]:selectedQuarters.join(', ');
-  var done=src.filter(function(f){return f.status==='done';}),bl=src.filter(function(f){return f.status==='blocked';}),ip=src.filter(function(f){return f.status==='inprogress';});
+
+  // Workflow-aware counts
+  var deployed=src.filter(function(f){return getWfStageStatus(f,'deploy')==='Done Deployment';});
+  var inDev=src.filter(function(f){var s=getWfStageStatus(f,'dev');return s==='In Progress';});
+  var onHold=src.filter(function(f){return getWfStageStatus(f,'dev')==='On Hold';});
+  var bugs=src.filter(function(f){return getWfStageStatus(f,'qa')==='Bug Found';});
+  var qcPass=src.filter(function(f){return getWfStageStatus(f,'qa')==='QC Passed';});
+  var approved=src.filter(function(f){return getWfStageStatus(f,'planning')==='Approved';});
+  var needImp=src.filter(function(f){return getWfStageStatus(f,'deploy')==='Need Improvement';});
+
   g('rpt-q').textContent=qLabel;
-  var stats=[['Quarter(s)',qLabel],['Features committed',src.length],['Completed',done.length+' of '+src.length],['In progress',ip.length],['Blocked',bl.length?bl.length+' \u2014 needs attention':'0 \u2014 all clear'],['Completion rate',src.length?Math.round(done.length/src.length*100)+'%':'\u2014']];
-  g('rpt-stats').innerHTML=stats.map(function(row){var isBlocked=row[0]==='Blocked'&&bl.length;return '<div class="rstat"><span style="color:var(--text2)">'+row[0]+'</span><span style="font-weight:500;'+(isBlocked?'color:var(--red-text)':'')+'">'+(row[1])+'</span></div>';}).join('');
-  g('rpt-hi').innerHTML=done.map(function(f){return '\u2713 '+esc(f.name)+' shipped'+(f.updatedBy?' ('+esc(f.updatedBy)+')':'');}).join('<br>')||'No completed features yet.';
-  g('rpt-risk').innerHTML=bl.map(function(f){return '\u26a0 '+esc(f.name)+(f.notes?' \u2014 '+esc(f.notes):'');}).join('<br>')||'No blockers currently.';
-  g('rpt-break').innerHTML='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">'+Object.keys(LABELS).map(function(s){var n=src.filter(function(f){return f.status===s;}).length;return '<div style="background:var(--bg2);border-radius:var(--r);padding:11px;border:1px solid var(--border)"><div style="font-size:10px;color:var(--text3);margin-bottom:3px">'+LABELS[s]+'</div><div style="font-size:20px;font-weight:600">'+n+'</div></div>';}).join('')+'</div>';
+
+  var stats=[
+    ['Quarter(s)', qLabel],
+    ['Features total', src.length],
+    ['Approved (planning)', approved.length],
+    ['In development', inDev.length],
+    ['Dev on hold', onHold.length?onHold.length+' — monitor closely':'0 — all clear'],
+    ['QC passed', qcPass.length],
+    ['Bugs found', bugs.length?bugs.length+' — needs attention':'0 — all clear'],
+    ['Deployed', deployed.length+' of '+src.length],
+    ['Need improvement', needImp.length?needImp.length+' — action needed':'0 — all clear'],
+    ['Deploy rate', src.length?Math.round(deployed.length/src.length*100)+'%':'—']
+  ];
+  g('rpt-stats').innerHTML=stats.map(function(row){
+    var isWarn=(row[0]==='Bugs found'&&bugs.length)||(row[0]==='Dev on hold'&&onHold.length)||(row[0]==='Need improvement'&&needImp.length);
+    return '<div class="rstat"><span style="color:var(--text2)">'+row[0]+'</span>'
+      +'<span style="font-weight:500;'+(isWarn?'color:var(--red-text)':'')+'">'+row[1]+'</span></div>';
+  }).join('');
+
+  // Highlights = deployed features
+  g('rpt-hi').innerHTML=deployed.map(function(f){
+    return '✓ '+esc(f.name)+' deployed'+(f.updatedBy?' ('+esc(f.updatedBy)+')':'');
+  }).join('<br>')||'No deployed features yet.';
+
+  // Risks = bugs + dev on hold + need improvement
+  var risks=[];
+  bugs.forEach(function(f){risks.push('⚠ [QA Bug] '+esc(f.name)+(f.workflow&&f.workflow.qa&&f.workflow.qa.remark?' — '+esc(f.workflow.qa.remark.substring(0,80)):''));});
+  onHold.forEach(function(f){risks.push('⏸ [Dev Hold] '+esc(f.name)+(f.workflow&&f.workflow.dev&&f.workflow.dev.remark?' — '+esc(f.workflow.dev.remark.substring(0,80)):''));});
+  needImp.forEach(function(f){risks.push('🔧 [Deploy] '+esc(f.name)+(f.workflow&&f.workflow.deploy&&f.workflow.deploy.remark?' — '+esc(f.workflow.deploy.remark.substring(0,80)):''));});
+  g('rpt-risk').innerHTML=risks.join('<br>')||'No active risks or blockers.';
+
+  // Per-feature pipeline table
+  var pipelineEl=g('rpt-pipeline');
+  if(pipelineEl){
+    if(!src.length){pipelineEl.innerHTML='<div style="color:var(--text3);font-size:13px">No features in selected quarters.</div>';}
+    else{
+      var stgDefs=[
+        {key:'planning',short:'Plan',done:'Approved',warn:'Skipped'},
+        {key:'prd',     short:'PRD',done:'Done',warn:''},
+        {key:'dev',     short:'Dev',done:'Done',warn:'On Hold'},
+        {key:'qa',      short:'QA', done:'QC Passed',warn:'Bug Found'},
+        {key:'deploy',  short:'Deploy',done:'Done Deployment',warn:'Need Improvement'}
+      ];
+      var tableHtml='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">'
+        +'<thead><tr style="border-bottom:2px solid var(--border)">'
+        +'<th style="text-align:left;padding:7px 10px;color:var(--text2);font-weight:600">Feature</th>'
+        +'<th style="text-align:center;padding:7px 6px;color:var(--text2);font-weight:600;white-space:nowrap">💡 Planning</th>'
+        +'<th style="text-align:center;padding:7px 6px;color:var(--text2);font-weight:600;white-space:nowrap">📐 PRD</th>'
+        +'<th style="text-align:center;padding:7px 6px;color:var(--text2);font-weight:600;white-space:nowrap">⚙️ Dev</th>'
+        +'<th style="text-align:center;padding:7px 6px;color:var(--text2);font-weight:600;white-space:nowrap">🔍 QA</th>'
+        +'<th style="text-align:center;padding:7px 6px;color:var(--text2);font-weight:600;white-space:nowrap">🚀 Deploy</th>'
+        +'<th style="text-align:right;padding:7px 6px;color:var(--text2);font-weight:600">Priority</th>'
+        +'</tr></thead><tbody>';
+      src.forEach(function(f){
+        tableHtml+='<tr style="border-bottom:1px solid var(--border);cursor:pointer" onclick="openEditFeature(\''+f.id+'\')">'
+
+          +'<td style="padding:8px 10px;font-weight:500;color:var(--text)">'+esc(f.name)+(f.quarter?'<span style="font-size:9px;color:var(--text3);margin-left:5px">'+esc(f.quarter)+'</span>':'')+'</td>';
+        stgDefs.forEach(function(s){
+          var st=getWfStageStatus(f,s.key);
+          var bg='var(--bg3)',tc='var(--text3)',lbl=st||'—';
+          if(st===s.done){bg='var(--green-bg)';tc='var(--green-text)';}
+          else if(s.warn&&st===s.warn){bg='var(--red-bg)';tc='var(--red-text)';}
+          else if(st&&st!=='Waiting'&&st!=='—'){bg='var(--blue-bg)';tc='var(--blue-text)';}
+          tableHtml+='<td style="padding:8px 6px;text-align:center"><span style="font-size:9px;padding:2px 6px;border-radius:6px;background:'+bg+';color:'+tc+';font-weight:600;white-space:nowrap">'+esc(lbl.length>12?lbl.substring(0,11)+'…':lbl)+'</span></td>';
+        });
+        var priColor=f.priority==='High'?'var(--red-text)':f.priority==='Low'?'var(--green-text)':'var(--amber-text)';
+        tableHtml+='<td style="padding:8px 6px;text-align:right;font-size:11px;font-weight:600;color:'+priColor+'">'+esc(f.priority||'—')+'</td></tr>';
+      });
+      tableHtml+='</tbody></table></div>';
+      pipelineEl.innerHTML=tableHtml;
+    }
+  }
+
+  // Breakdown by workflow stage
+  var stageCounts=[
+    {label:'Need Brainstorm',key:'planning',val:'Need Brainstorm',color:'var(--bg3)',tc:'var(--text2)'},
+    {label:'Planning Approved',key:'planning',val:'Approved',color:'var(--green-bg)',tc:'var(--green-text)'},
+    {label:'PRD In Progress',key:'prd',val:'In Progress',color:'var(--blue-bg)',tc:'var(--blue-text)'},
+    {label:'PRD Done',key:'prd',val:'Done',color:'var(--green-bg)',tc:'var(--green-text)'},
+    {label:'Dev In Progress',key:'dev',val:'In Progress',color:'var(--blue-bg)',tc:'var(--blue-text)'},
+    {label:'Dev On Hold',key:'dev',val:'On Hold',color:'var(--amber-bg)',tc:'var(--amber-text)'},
+    {label:'Dev Done',key:'dev',val:'Done',color:'var(--green-bg)',tc:'var(--green-text)'},
+    {label:'QA Checking',key:'qa',val:'Checking in Progress',color:'var(--purple-bg)',tc:'var(--purple-text)'},
+    {label:'Bug Found',key:'qa',val:'Bug Found',color:'var(--red-bg)',tc:'var(--red-text)'},
+    {label:'QC Passed',key:'qa',val:'QC Passed',color:'var(--green-bg)',tc:'var(--green-text)'},
+    {label:'Deployed',key:'deploy',val:'Done Deployment',color:'var(--green-bg)',tc:'var(--green-text)'},
+    {label:'Need Improvement',key:'deploy',val:'Need Improvement',color:'var(--red-bg)',tc:'var(--red-text)'}
+  ];
+  g('rpt-break').innerHTML='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">'
+    +stageCounts.map(function(sc){
+      var n=src.filter(function(f){return getWfStageStatus(f,sc.key)===sc.val;}).length;
+      return '<div style="background:'+sc.color+';border-radius:var(--r);padding:11px;border:1px solid var(--border)">'
+        +'<div style="font-size:10px;color:'+sc.tc+';margin-bottom:3px;font-weight:600">'+sc.label+'</div>'
+        +'<div style="font-size:20px;font-weight:600;color:'+sc.tc+'">'+n+'</div>'
+        +'</div>';
+    }).join('')+'</div>';
 }
 
 // ── Sprint Planner ──
